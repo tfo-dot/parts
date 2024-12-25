@@ -1,0 +1,31 @@
+"parts meta"
+#/module: json
+#/version: 1.0.0
+#/parts: 1.0.0
+#/result: parts
+
+"scanner"
+let scannerRules = [
+  #> value: '{', name: "left_brace" <#
+  #> value: '}', name: "right_brace" <#
+]
+
+module.Scanner = @Parts.Scanner(scannerRules)
+
+"parser"
+
+class Parser: @Parts.Parser {
+  parse() {
+
+    while this.input.size > idx {
+      
+    }
+
+  }
+}
+
+module.Parser = Parser()
+
+"interpreter"
+
+module.Run = 
