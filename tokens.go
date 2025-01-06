@@ -4,12 +4,40 @@ type TokenType = int
 
 var Operators = []rune{'+', '-', '/', '*', ';', '[', ']', '(', ')', '{', '}', '.', ':', ',', '|', '&', '>', '<', '!', '#', '-', '=', '?'}
 
+var Keywords = []string{
+	"false", "if", "let", "true",
+	"fun", "return", "else", "static",
+	"for", "class", "break", "continue",
+	"import", "from", "as",
+}
+
+var ValidOperators = map[string]string{
+	"+": "PLUS",
+	"-": "MINUS",
+	"/": "SLASH",
+	"*": "STAR",
+	";": "SEMICOLON",
+	":": "COLON",
+	".": "DOT",
+	",": "COMMA",
+	"(": "LEFT_PAREN",
+	")": "RIGHT_PAREN",
+	"{": "LEFT_BRACE",
+	"}": "RIGHT_BRACE",
+	"[": "LEFT_BRACKET",
+	"]": "RIGHT_BRACKET",
+	"@": "AT",
+	"=": "EQUALS",
+}
+
 const (
 	TokenOperator TokenType = iota
 	TokenNumber
 	TokenKeyword
+	TokenIdentifier
 	TokenString
 	TokenNewLine
+	TokenInvalid
 )
 
 type Rule struct {

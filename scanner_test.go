@@ -43,3 +43,63 @@ func TestScannerUnknownToken(t *testing.T) {
 		t.Errorf("expected error")
 	}
 }
+
+func TestScannerLetStatement(t *testing.T) {
+	scanner := GetScannerWithSource("let x = 0;")
+
+	expectedTokens := []Token{
+		{Type: TokenKeyword, Value: []rune("let")},
+		{Type: TokenIdentifier, Value: []rune("x")},
+		{Type: TokenOperator, Value: []rune("EQUALS")},
+		{Type: TokenNumber, Value: []rune("0")},
+		{Type: TokenOperator, Value: []rune("SEMICOLON")},
+	}
+
+	for _, curr := range expectedTokens {
+		token, err := scanner.Next()
+
+		if err != nil {
+			t.Errorf("unexpected error: %s", err)
+			return
+		}
+
+		if string(token.Value) != string(curr.Value) {
+			t.Errorf("token values don't match: %s != %s", string(token.Value), string(curr.Value))
+			return
+		}
+
+		if token.Type != curr.Type {
+			t.Errorf("token types don't match: %d != %d", token.Type, curr.Type)
+			return
+		}
+	}
+}
+
+func TestEmptyParen(t *testing.T) {
+	scanner := GetScannerWithSource("();")
+
+	expectedTokens := []Token{
+		{Type: TokenOperator, Value: []rune("LEFT_PAREN")},
+		{Type: TokenOperator, Value: []rune("RIGHT_PAREN")},
+		{Type: TokenOperator, Value: []rune("SEMICOLON")},
+	}
+
+	for _, curr := range expectedTokens {
+		token, err := scanner.Next()
+
+		if err != nil {
+			t.Errorf("unexpected error: %s", err)
+			return
+		}
+
+		if string(token.Value) != string(curr.Value) {
+			t.Errorf("token values don't match: %s != %s", string(token.Value), string(curr.Value))
+			return
+		}
+
+		if token.Type != curr.Type {
+			t.Errorf("token types don't match: %d != %d", token.Type, curr.Type)
+			return
+		}
+	}
+}

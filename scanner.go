@@ -1,6 +1,10 @@
 package parts
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+	"unicode"
+)
 
 type Scanner struct {
 	Rules  []Rule
@@ -10,17 +14,76 @@ type Scanner struct {
 }
 
 func (s *Scanner) Next() (Token, error) {
+	for unicode.IsSpace(s.Peek()) {
+		s.Index++
+	}
+
 	if s.Peek() == '"' {
 		return s.ParseQuote()
 	}
 
 	for _, rule := range s.Rules {
 		if rule.BaseRule(s.Peek()) {
-			return s.ParseRule(rule)
+			rValue, rError := s.ParseRule(rule)
+
+			if rError != nil {
+				return rValue, rError
+			}
+
+			if rValue.Type == TokenKeyword {
+				rValue = s.SplitByKeyword(rValue)
+			}
+
+			if rValue.Type == TokenOperator {
+				return s.SplitOperators(rValue)
+			}
+
+			return rValue, rError
 		}
 	}
 
-	return Token{}, fmt.Errorf("unknown token")
+	return Token{}, fmt.Errorf("unknown token %s", string(s.Peek()))
+}
+
+func (s Scanner) SplitByKeyword(token Token) Token {
+	found := false
+
+	for _, kw := range Keywords {
+		if kw == string(token.Value) {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		token.Type = TokenIdentifier
+	}
+
+	return token
+}
+
+func (s *Scanner) SplitOperators(token Token) (Token, error) {
+	tokenValue := string(token.Value)
+	name, ok := ValidOperators[tokenValue]
+
+	if ok {
+		return Token{Type: TokenOperator, Value: []rune(name)}, nil
+	}
+
+	for {
+		println(tokenValue)
+		if len(tokenValue) == 0 {
+			return Token{}, errors.New("not valid operator")
+		}
+
+		tokenValue = tokenValue[0 : len(tokenValue)-1]
+		s.Index--
+		name, ok := ValidOperators[tokenValue]
+
+		if ok {
+			return Token{Type: TokenOperator, Value: []rune(name)}, nil
+		}
+	}
 }
 
 func (s *Scanner) Peek() rune {
