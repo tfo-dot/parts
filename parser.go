@@ -87,7 +87,11 @@ func (p *Parser) parseTopLevel() ([]Bytecode, error) {
 			Value:       identifierToken.Value,
 		})
 
-		literalIdx := len(p.Literals) - 1
+		literalIdx, err := encodeLen(len(p.Literals) - 1)
+
+		if err != nil {
+			return []Bytecode{}, errors.Join(errors.New("got error while writing literal offset"), err)
+		}
 
 		initialValue := []Bytecode{}
 
@@ -101,7 +105,7 @@ func (p *Parser) parseTopLevel() ([]Bytecode, error) {
 			initialValue = value
 		}
 
-		return append([]Bytecode{B_DECLARE, DECLARE_LET, Bytecode(literalIdx)}, initialValue...), nil
+		return append(append([]Bytecode{B_DECLARE, DECLARE_LET}, literalIdx...), initialValue...), nil
 	}
 
 	return p.parseExpression()
@@ -111,7 +115,7 @@ func (p *Parser) parseExpression() ([]Bytecode, error) {
 	//TODO all the cases
 
 	if p.matchKeyword("fun") {
-		functionName := -1
+		functionName := []Bytecode{}
 		{
 			currentToken, err := p.peek()
 
@@ -131,7 +135,11 @@ func (p *Parser) parseExpression() ([]Bytecode, error) {
 					Value:       functionNameToken.Value,
 				})
 
-				functionName = len(p.Literals) - 1
+				functionName, err = encodeLen(len(p.Literals) - 1)
+
+				if err != nil {
+					return []Bytecode{}, errors.Join(errors.New("got error while encoding identifier literal"))
+				}
 			}
 		}
 
@@ -197,12 +205,17 @@ func (p *Parser) parseExpression() ([]Bytecode, error) {
 		}
 
 		p.Literals = append(p.Literals, Literal{FunLiteral, declaration})
-		idx := len(p.Literals) - 1
 
-		if functionName == -1 {
-			return []Bytecode{Bytecode(idx)}, nil
+		idx, err := encodeLen(len(p.Literals) - 1)
+
+		if err != nil {
+			return []Bytecode{}, errors.Join(errors.New("encountered err in length encoding"), err)
+		}
+
+		if len(functionName) == 0 {
+			return idx, nil
 		} else {
-			return []Bytecode{B_DECLARE, DECLARE_FUN, Bytecode(functionName), Bytecode(idx)}, nil
+			return append(append([]Bytecode{B_DECLARE, DECLARE_FUN}, functionName...), idx...), nil
 		}
 	}
 
@@ -288,9 +301,13 @@ func (p *Parser) parsePrimary() ([]Bytecode, error) {
 			Value:       val,
 		})
 
-		literalIdx := len(p.Literals) - 1
+		literalIdx, err := encodeLen(len(p.Literals) - 1)
 
-		return []Bytecode{Bytecode(literalIdx)}, nil
+		if err != nil {
+			return []Bytecode{}, errors.Join(errors.New("got error while encoding length"), err)
+		}
+
+		return literalIdx, nil
 	}
 
 	if currentToken.Type == TokenString {
@@ -301,9 +318,13 @@ func (p *Parser) parsePrimary() ([]Bytecode, error) {
 			Value:       currentToken.Value,
 		})
 
-		literalIdx := len(p.Literals) - 1
+		literalIdx, err := encodeLen(len(p.Literals) - 1)
 
-		return []Bytecode{Bytecode(literalIdx)}, nil
+		if err != nil {
+			return []Bytecode{}, errors.Join(errors.New("got error while encoding length"), err)
+		}
+
+		return literalIdx, nil
 	}
 
 	if p.matchOperator("LEFT_PAREN") {
@@ -330,11 +351,7 @@ func (p *Parser) parsePrimary() ([]Bytecode, error) {
 func (p *Parser) match(tokenType TokenType, value string) bool {
 	currentToken, err := p.peek()
 
-	if err != nil {
-		return false
-	}
-
-	if currentToken.Type != tokenType {
+	if err != nil || currentToken.Type != tokenType {
 		return false
 	}
 
@@ -400,4 +417,30 @@ const (
 type FunctionDeclaration struct {
 	Params [][]rune
 	Body   []Bytecode
+}
+
+func encodeLen(num int) ([]Bytecode, error) {
+	if num < 0 {
+		return []Bytecode{}, errors.New("length can't be negative")
+	}
+
+	if num <= 125 {
+		return []Bytecode{Bytecode(num)}, nil
+	}
+
+	if num <= 65535 {
+		return []Bytecode{126, Bytecode(num >> 8), Bytecode(num)}, nil
+	}
+
+	return []Bytecode{
+		127,
+		Bytecode(num >> 56),
+		Bytecode(num >> 48),
+		Bytecode(num >> 40),
+		Bytecode(num >> 32),
+		Bytecode(num >> 24),
+		Bytecode(num >> 16),
+		Bytecode(num >> 8),
+		Bytecode(num),
+	}, nil
 }
