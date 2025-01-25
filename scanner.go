@@ -1,4 +1,4 @@
-package parts
+package main
 
 import (
 	"errors"
@@ -42,7 +42,7 @@ func (s *Scanner) Next() (Token, error) {
 		}
 	}
 
-	return Token{}, fmt.Errorf("unknown token %s", string(s.Peek()))
+	return Token{}, fmt.Errorf("unknown token %s [%d, pos> %d:%d]", string(s.Peek()), s.Peek(), s.Line, s.Index)
 }
 
 func (s Scanner) SplitByKeyword(token Token) Token {
@@ -71,7 +71,6 @@ func (s *Scanner) SplitOperators(token Token) (Token, error) {
 	}
 
 	for {
-		println(tokenValue)
 		if len(tokenValue) == 0 {
 			return Token{}, errors.New("not valid operator")
 		}

@@ -1,4 +1,4 @@
-package parts
+package main
 
 type TokenType = int
 
@@ -12,22 +12,25 @@ var Keywords = []string{
 }
 
 var ValidOperators = map[string]string{
-	"+": "PLUS",
-	"-": "MINUS",
-	"/": "SLASH",
-	"*": "STAR",
-	";": "SEMICOLON",
-	":": "COLON",
-	".": "DOT",
-	",": "COMMA",
-	"(": "LEFT_PAREN",
-	")": "RIGHT_PAREN",
-	"{": "LEFT_BRACE",
-	"}": "RIGHT_BRACE",
-	"[": "LEFT_BRACKET",
-	"]": "RIGHT_BRACKET",
-	"@": "AT",
-	"=": "EQUALS",
+	"+":  "PLUS",
+	"-":  "MINUS",
+	"/":  "SLASH",
+	"*":  "STAR",
+	";":  "SEMICOLON",
+	":":  "COLON",
+	".":  "DOT",
+	",":  "COMMA",
+	"(":  "LEFT_PAREN",
+	")":  "RIGHT_PAREN",
+	"{":  "LEFT_BRACE",
+	"}":  "RIGHT_BRACE",
+	"[":  "LEFT_BRACKET",
+	"]":  "RIGHT_BRACKET",
+	"@":  "AT",
+	"=":  "EQUALS",
+	"|>": "OBJ_START",
+	"<|": "OBJ_END",
+	"#>": "META",
 }
 
 const (

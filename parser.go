@@ -1,4 +1,4 @@
-package parts
+package main
 
 import (
 	"errors"
@@ -20,6 +20,7 @@ type Parser struct {
 	LastToken Token
 
 	Literals []Literal
+	Meta     map[string]string
 }
 
 type LiteralType int
@@ -31,6 +32,8 @@ const (
 	StringLiteral
 	RefLiteral
 	FunLiteral
+	ObjLiteral
+	ListLiteral
 )
 
 var InitialLiterals = []Literal{
@@ -108,6 +111,36 @@ func (p *Parser) parseTopLevel() ([]Bytecode, error) {
 		return append(append([]Bytecode{B_DECLARE, DECLARE_LET}, literalIdx...), initialValue...), nil
 	}
 
+	if p.matchOperator("META") {
+		metaKeyToken, err := p.advance()
+
+		if err != nil {
+			return []Bytecode{}, errors.Join(errors.New("got error while reading meta value"), err)
+		}
+
+		if metaKeyToken.Type != TokenString {
+			return []Bytecode{}, errors.New("only strings are valid meta keys")
+		}
+
+		if !p.matchOperator("COLON") {
+			return []Bytecode{}, errors.New("missing are valid meta keys")
+		}
+
+		metaValueToken, err := p.peek()
+
+		if err != nil {
+			return []Bytecode{}, errors.Join(errors.New("got error while reading meta value"), err)
+		}
+
+		if metaValueToken.Type != TokenString {
+			return []Bytecode{}, errors.New("only strings are valid meta values")
+		}
+
+		p.Meta[string(metaKeyToken.Value)] = string(metaValueToken.Value)
+
+		return []Bytecode{}, nil
+	}
+
 	return p.parseExpression()
 }
 
@@ -165,8 +198,8 @@ func (p *Parser) parseExpression() ([]Bytecode, error) {
 		}
 
 		if token.Type != TokenOperator && string(token.Value) != "RIGHT_PAREN" {
-			for {
-				identifierToken, err := p.peek()
+			for cond := true; cond; cond = p.matchOperator("COMMA") {
+				identifierToken, err := p.advance()
 
 				if identifierToken.Type != TokenIdentifier {
 					return []Bytecode{}, errors.Join(errors.New("encountered unexpected token in function params"), err)
@@ -270,7 +303,7 @@ func (p *Parser) parseBlock(checkBrace bool) ([]Bytecode, error) {
 	}
 
 	if !p.matchOperator("RIGHT_BRACE") {
-		return []Bytecode{}, errors.New("opening brace not found")
+		return []Bytecode{}, errors.New("closing brace not found")
 	}
 
 	return append(append([]Bytecode{B_NEW_SCOPE}, body...), B_END_SCOPE), nil
@@ -286,6 +319,10 @@ func (p *Parser) parsePrimary() ([]Bytecode, error) {
 	}
 
 	currentToken, err := p.peek()
+
+	if err != nil {
+		return []Bytecode{}, errors.Join(errors.New("expected expression, got error"), err)
+	}
 
 	if currentToken.Type == TokenNumber {
 		p.advance()
@@ -314,8 +351,8 @@ func (p *Parser) parsePrimary() ([]Bytecode, error) {
 		p.advance()
 
 		p.Literals = append(p.Literals, Literal{
-			LiteralType: IntLiteral,
-			Value:       currentToken.Value,
+			LiteralType: StringLiteral,
+			Value:       string(currentToken.Value),
 		})
 
 		literalIdx, err := encodeLen(len(p.Literals) - 1)
@@ -341,8 +378,87 @@ func (p *Parser) parsePrimary() ([]Bytecode, error) {
 		return val, nil
 	}
 
-	if err != nil {
-		return []Bytecode{}, errors.Join(errors.New("expected expression, got error"), err)
+	if p.matchOperator("OBJ_START") {
+		entries := make([][]Bytecode, 0)
+
+		if !p.matchOperator("OBJ_END") {
+			for {
+				entry := make([]Bytecode, 0)
+
+				objKey, err := p.parseExpression()
+
+				if err != nil {
+					return []Bytecode{}, errors.Join(errors.New("encountered error while parsing obj key"), err)
+				}
+
+				entry = append(entry, objKey...)
+				entry = append(entry, B_SPACING)
+
+				if !p.matchOperator("COLON") {
+					return []Bytecode{}, errors.New("expected colon to separate key and value")
+				}
+
+				objVal, err := p.parseExpression()
+
+				if err != nil {
+					return []Bytecode{}, errors.Join(errors.New("encountered error while parsing obj value"), err)
+				}
+
+				entries = append(entries, append(entry, objVal...))
+
+				if !p.matchOperator("COMMA") {
+					break
+				}
+			}
+		}
+
+		if !p.matchOperator("OBJ_END") {
+			return []Bytecode{}, errors.New("expected closing operator for object")
+		}
+
+		p.Literals = append(p.Literals, Literal{
+			LiteralType: ObjLiteral,
+			Value:       ObjDefinition{Entries: entries},
+		})
+
+		literalIdx, err := encodeLen(len(p.Literals) - 1)
+
+		if err != nil {
+			return []Bytecode{}, errors.Join(errors.New("got error while encoding length"), err)
+		}
+
+		return literalIdx, nil
+	}
+
+	if p.matchOperator("LEFT_BRACKET") {
+		elements := make([][]Bytecode, 0)
+
+		for cond := true; cond; cond = p.matchOperator("COMMA") {
+			elt, err := p.parseExpression()
+
+			if err != nil {
+				return []Bytecode{}, errors.Join(errors.New("expected expression, got error"), err)
+			}
+
+			elements = append(elements, elt)
+		}
+
+		if !p.matchOperator("RIGHT_BRACKET") {
+			return []Bytecode{}, errors.New("expected ']' after array elements")
+		}
+
+		p.Literals = append(p.Literals, Literal{
+			LiteralType: ListLiteral,
+			Value:       ListDefinition{Entries: elements},
+		})
+
+		literalIdx, err := encodeLen(len(p.Literals) - 1)
+
+		if err != nil {
+			return []Bytecode{}, errors.Join(errors.New("got error while encoding length"), err)
+		}
+
+		return literalIdx, nil
 	}
 
 	return []Bytecode{}, fmt.Errorf("expected expression, got %s", string(currentToken.Value))
@@ -407,6 +523,7 @@ const (
 	B_RETURN
 	B_NEW_SCOPE
 	B_END_SCOPE
+	B_SPACING
 )
 
 const (
@@ -417,6 +534,14 @@ const (
 type FunctionDeclaration struct {
 	Params [][]rune
 	Body   []Bytecode
+}
+
+type ObjDefinition struct {
+	Entries [][]Bytecode
+}
+
+type ListDefinition struct {
+	Entries [][]Bytecode
 }
 
 func encodeLen(num int) ([]Bytecode, error) {
@@ -443,4 +568,14 @@ func encodeLen(num int) ([]Bytecode, error) {
 		Bytecode(num >> 8),
 		Bytecode(num),
 	}, nil
+}
+
+func mustEncodeLen(num int) []Bytecode {
+	val, err := encodeLen(num)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return val
 }
