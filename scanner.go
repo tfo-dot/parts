@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"unicode"
 )
 
@@ -51,6 +52,7 @@ func (s Scanner) SplitByKeyword(token Token) Token {
 	for _, kw := range Keywords {
 		if kw == string(token.Value) {
 			found = true
+			token.Value = []rune(strings.ToUpper(string(token.Value)))
 			break
 		}
 	}

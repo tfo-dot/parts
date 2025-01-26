@@ -74,7 +74,7 @@ func (p *Parser) parse() ([]Bytecode, error) {
 }
 
 func (p *Parser) parseTopLevel() ([]Bytecode, error) {
-	if p.matchKeyword("let") {
+	if p.matchKeyword("LET") {
 		identifierToken, err := p.advance()
 
 		if err != nil {
@@ -147,7 +147,7 @@ func (p *Parser) parseTopLevel() ([]Bytecode, error) {
 func (p *Parser) parseExpression() ([]Bytecode, error) {
 	//TODO all the cases
 
-	if p.matchKeyword("fun") {
+	if p.matchKeyword("FUN") {
 		functionName := []Bytecode{}
 		{
 			currentToken, err := p.peek()
@@ -310,11 +310,11 @@ func (p *Parser) parseBlock(checkBrace bool) ([]Bytecode, error) {
 }
 
 func (p *Parser) parsePrimary() ([]Bytecode, error) {
-	if p.matchKeyword("false") {
+	if p.matchKeyword("FALSE") {
 		return []Bytecode{0}, nil
 	}
 
-	if p.matchKeyword("true") {
+	if p.matchKeyword("TRUE") {
 		return []Bytecode{1}, nil
 	}
 
