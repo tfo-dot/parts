@@ -268,6 +268,22 @@ func (p *Parser) parseExpression() ([]Bytecode, error) {
 		return []Bytecode{}, rErr
 	}
 
+	for {
+		if p.matchOperator("DOT") {
+			accessor, rErr := p.parsePrimary()
+
+			if rErr != nil {
+				return []Bytecode{}, rErr
+			}
+
+			rVal = append(append(append([]Bytecode{B_DOT}, rVal...), B_SPACING), accessor...)
+
+			continue
+		}
+
+		break
+	}
+
 	p.matchOperator("SEMICOLON")
 
 	return rVal, nil
@@ -352,6 +368,23 @@ func (p *Parser) parsePrimary() ([]Bytecode, error) {
 
 		p.Literals = append(p.Literals, Literal{
 			LiteralType: StringLiteral,
+			Value:       string(currentToken.Value),
+		})
+
+		literalIdx, err := encodeLen(len(p.Literals) - 1)
+
+		if err != nil {
+			return []Bytecode{}, errors.Join(errors.New("got error while encoding length"), err)
+		}
+
+		return literalIdx, nil
+	}
+
+	if currentToken.Type == TokenIdentifier {
+		p.advance()
+
+		p.Literals = append(p.Literals, Literal{
+			LiteralType: RefLiteral,
 			Value:       string(currentToken.Value),
 		})
 
@@ -524,6 +557,7 @@ const (
 	B_NEW_SCOPE
 	B_END_SCOPE
 	B_SPACING
+	B_DOT
 )
 
 const (

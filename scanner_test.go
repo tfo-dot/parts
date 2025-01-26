@@ -48,7 +48,7 @@ func TestScannerLetStatement(t *testing.T) {
 	scanner := GetScannerWithSource("let x = 0;")
 
 	expectedTokens := []Token{
-		{Type: TokenKeyword, Value: []rune("let")},
+		{Type: TokenKeyword, Value: []rune("LET")},
 		{Type: TokenIdentifier, Value: []rune("x")},
 		{Type: TokenOperator, Value: []rune("EQUALS")},
 		{Type: TokenNumber, Value: []rune("0")},

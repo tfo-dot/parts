@@ -395,6 +395,68 @@ func TestArray(t *testing.T) {
 	}
 }
 
+func TestDotExpression(t *testing.T) {
+	parser := GetParserWithSource("val.key")
+
+	bytecode, err := parser.next()
+
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+
+	idxVal, _ := GetParserLiteral(parser, RefLiteral, "val")
+
+	if idxVal == -1 {
+		t.Error("literal (Ref, 'val') wasn't present")
+		return
+	}
+
+	idxKey, _ := GetParserLiteral(parser, RefLiteral, "key")
+
+	if idxKey == -1 {
+		t.Error("literal (Ref, 'key') wasn't present")
+		return
+	}
+
+	CheckBytecode(t, bytecode, append(append(append([]Bytecode{B_DOT}, mustEncodeLen(idxVal)...), B_SPACING), mustEncodeLen(idxKey)...))
+}
+
+func TestDotNestedExpression(t *testing.T) {
+	parser := GetParserWithSource("(obj.val).key")
+
+	bytecode, err := parser.next()
+
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+
+	idxObj, _ := GetParserLiteral(parser, RefLiteral, "obj")
+
+	if idxObj == -1 {
+		t.Error("literal (Ref, 'obj') wasn't present")
+		return
+	}
+
+
+	idxVal, _ := GetParserLiteral(parser, RefLiteral, "val")
+
+	if idxVal == -1 {
+		t.Error("literal (Ref, 'val') wasn't present")
+		return
+	}
+
+	idxKey, _ := GetParserLiteral(parser, RefLiteral, "key")
+
+	if idxKey == -1 {
+		t.Error("literal (Ref, 'key') wasn't present")
+		return
+	}
+
+	CheckBytecode(t, bytecode, append(append(append(append(append([]Bytecode{B_DOT, B_DOT}, mustEncodeLen(idxObj)...), B_SPACING), mustEncodeLen(idxVal)...), B_SPACING), mustEncodeLen(idxKey)...))
+}
+
 func CheckBytecode(t *testing.T, result []Bytecode, expected []Bytecode) bool {
 	fmt.Printf("Checking chunks: %v ?? %v\n", result, expected)
 

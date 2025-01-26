@@ -2,24 +2,63 @@
 #>"module": "json"
 #>"version": "1.0.0"
 #>"parts": "1.0.0"
+
+"Parts -> parts value (obj, int or whatever it returns from parser)"
 #>"result": "parts"
 
-"scanner"
-let scannerRules = [
-  |> value: '{', name: "left_brace" <|,
-  |> value: '}', name: "right_brace" <|
-]
-
-module.Scanner = Parts.Scanner(scannerRules)
-
-"parser"
-
-class Parser: Parts.Parser {
-  parse() {
-
+fun Parse(tokens) {
+  if opOf(tokens[0], "LEFT_BRACKET") {
+    return ParseArray(tokens, true)
   }
+
+  if opOf(tokens[0], "LEFT_BRACE") {
+    return ParseObject(tokens, true)
+  }
+
+  "anything that is not an object, value idk"
+  return Parts.Parse(tokens)
 }
 
-module.Parser = Parser()
+fun ParseArray(tokens, topLevel) {
+  tokens = tokens[1:]
 
-"interpreter"
+  let array = [] 
+
+  do {
+    let res = Parts.ParseExpression(tokens)
+
+    if Array.len(res.Values) == 0 {
+      raise |> msg: "Got no expression" <|
+    }
+
+    if Array.len(res.Values) > 1 {
+      raise |> msg: "Expr resolved in more than one value" <|
+    }
+
+    if res.Err {
+      raise |> msg: "Unexpected error", err: res.Err <|
+    }
+
+    array = Array.append(array, res.Values[0])
+
+    tokens = tokens[res.ConsumedCount:]
+  } while opOf(token[0], "COMMA")
+
+  if !opOf(token[0], "RIGHT_BRACKET") {
+    raise |> msg: "Expected ']' didnt found it" <|
+  }
+
+  if Array.len(tokens) > 0 && topLevel {
+    raise |> msg: "Expression resolved with more than one value" <|
+  }
+
+  return |> Values: array <| 
+}
+
+fun ParseObject(tokens topLevel) {
+  
+}
+
+fun opOf(token, value) = token.Type == Parts.Token.Operator && token.Value == value;
+
+export Parse as Parser
