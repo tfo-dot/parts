@@ -1,4 +1,4 @@
-package main
+package parts
 
 import (
 	"errors"
@@ -44,6 +44,22 @@ var InitialLiterals = []Literal{
 type Literal struct {
 	LiteralType LiteralType
 	Value       any
+}
+
+func (p *Parser) parseAll() ([]Bytecode, error) {
+	bytecode := make([]Bytecode, 0)
+
+	for !(p.LastToken.Type == TokenInvalid && string(p.LastToken.Value) == "EOF") {
+		temp, err := p.next()
+
+		if err != nil {
+			return []Bytecode{}, errors.Join(errors.New("got error while parsing whole code"), err)
+		}
+
+		bytecode = append(bytecode, temp...)
+	}
+
+	return bytecode, nil
 }
 
 func (p *Parser) next() ([]Bytecode, error) {
@@ -153,14 +169,14 @@ func (p *Parser) parseExpression() ([]Bytecode, error) {
 			currentToken, err := p.peek()
 
 			if err != nil {
-				return []Bytecode{}, errors.Join(errors.New("got error while parsing identifier name"))
+				return []Bytecode{}, errors.Join(errors.New("got error while parsing identifier name"), err)
 			}
 
 			if currentToken.Type == TokenIdentifier {
 				functionNameToken, err := p.advance()
 
 				if err != nil {
-					return []Bytecode{}, errors.Join(errors.New("got error while parsing identifier name"))
+					return []Bytecode{}, errors.Join(errors.New("got error while parsing identifier name"), err)
 				}
 
 				p.Literals = append(p.Literals, Literal{
@@ -171,7 +187,7 @@ func (p *Parser) parseExpression() ([]Bytecode, error) {
 				functionName, err = encodeLen(len(p.Literals) - 1)
 
 				if err != nil {
-					return []Bytecode{}, errors.Join(errors.New("got error while encoding identifier literal"))
+					return []Bytecode{}, errors.Join(errors.New("got error while encoding identifier literal"), err)
 				}
 			}
 		}
@@ -276,7 +292,7 @@ func (p *Parser) parseExpression() ([]Bytecode, error) {
 				return []Bytecode{}, rErr
 			}
 
-			rVal = append(append(append([]Bytecode{B_DOT}, rVal...), B_SPACING), accessor...)
+			rVal = append(append([]Bytecode{B_DOT}, rVal...), accessor...)
 
 			continue
 		}
@@ -425,7 +441,6 @@ func (p *Parser) parsePrimary() ([]Bytecode, error) {
 				}
 
 				entry = append(entry, objKey...)
-				entry = append(entry, B_SPACING)
 
 				if !p.matchOperator("COLON") {
 					return []Bytecode{}, errors.New("expected colon to separate key and value")
@@ -443,10 +458,10 @@ func (p *Parser) parsePrimary() ([]Bytecode, error) {
 					break
 				}
 			}
-		}
 
-		if !p.matchOperator("OBJ_END") {
-			return []Bytecode{}, errors.New("expected closing operator for object")
+			if !p.matchOperator("OBJ_END") {
+				return []Bytecode{}, errors.New("expected closing operator for object")
+			}
 		}
 
 		p.Literals = append(p.Literals, Literal{
@@ -540,6 +555,8 @@ func (p *Parser) advance() (Token, error) {
 
 	token, err := p.Scanner.Next()
 
+	println(err)
+
 	if err != nil {
 		return Token{}, err
 	}
@@ -556,7 +573,6 @@ const (
 	B_RETURN
 	B_NEW_SCOPE
 	B_END_SCOPE
-	B_SPACING
 	B_DOT
 )
 

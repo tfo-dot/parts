@@ -1,4 +1,4 @@
-package main
+package parts
 
 import (
 	"errors"
@@ -15,16 +15,22 @@ type Scanner struct {
 }
 
 func (s *Scanner) Next() (Token, error) {
+	if s.Peek() == 0 {
+		return Token{Type: TokenInvalid, Value: []rune("EOF")}, nil
+	}
+
 	for unicode.IsSpace(s.Peek()) {
 		s.Index++
 	}
 
-	if s.Peek() == '"' {
+	peekValue := s.Peek()
+
+	if peekValue == '"' {
 		return s.ParseQuote()
 	}
 
 	for _, rule := range s.Rules {
-		if rule.BaseRule(s.Peek()) {
+		if rule.BaseRule(peekValue) {
 			rValue, rError := s.ParseRule(rule)
 
 			if rError != nil {

@@ -1,21 +1,9 @@
-package main
+package parts
 
 import (
 	"fmt"
 	"testing"
 )
-
-func GetParserWithSource(source string) Parser {
-	scanner := GetScannerWithSource(source)
-
-	return Parser{
-		Scanner:   &scanner,
-		Scope:     TopLevel,
-		Literals:  InitialLiterals,
-		LastToken: Token{Type: TokenInvalid},
-		Meta:      make(map[string]string),
-	}
-}
 
 func TestLetFalse(t *testing.T) {
 	parser := GetParserWithSource("let x = false;")
@@ -311,7 +299,7 @@ func TestObjectWithIntEntry(t *testing.T) {
 		return
 	}
 
-	CheckBytecode(t, objDef[0], append(append(encodedOneOffset, B_SPACING), encodedZeroOffset...))
+	CheckBytecode(t, objDef[0], append(encodedOneOffset, encodedZeroOffset...))
 }
 
 func TestMeta(t *testing.T) {
@@ -419,7 +407,7 @@ func TestDotExpression(t *testing.T) {
 		return
 	}
 
-	CheckBytecode(t, bytecode, append(append(append([]Bytecode{B_DOT}, mustEncodeLen(idxVal)...), B_SPACING), mustEncodeLen(idxKey)...))
+	CheckBytecode(t, bytecode, append(append([]Bytecode{B_DOT}, mustEncodeLen(idxVal)...), mustEncodeLen(idxKey)...))
 }
 
 func TestDotNestedExpression(t *testing.T) {
@@ -454,7 +442,7 @@ func TestDotNestedExpression(t *testing.T) {
 		return
 	}
 
-	CheckBytecode(t, bytecode, append(append(append(append(append([]Bytecode{B_DOT, B_DOT}, mustEncodeLen(idxObj)...), B_SPACING), mustEncodeLen(idxVal)...), B_SPACING), mustEncodeLen(idxKey)...))
+	CheckBytecode(t, bytecode, append(append(append([]Bytecode{B_DOT, B_DOT}, mustEncodeLen(idxObj)...), mustEncodeLen(idxVal)...),  mustEncodeLen(idxKey)...))
 }
 
 func CheckBytecode(t *testing.T, result []Bytecode, expected []Bytecode) bool {

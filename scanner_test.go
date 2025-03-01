@@ -1,10 +1,6 @@
-package main
+package parts
 
 import "testing"
-
-func GetScannerWithSource(source string) Scanner {
-	return Scanner{Source: []rune(source), Rules: ScannerRules}
-}
 
 func TestScanner(t *testing.T) {
 	scanner := GetScannerWithSource("\"hello\"")
