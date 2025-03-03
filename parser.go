@@ -23,29 +23,6 @@ type Parser struct {
 	Meta     map[string]string
 }
 
-type LiteralType int
-
-const (
-	IntLiteral LiteralType = iota
-	DoubleLiteral
-	BoolLiteral
-	StringLiteral
-	RefLiteral
-	FunLiteral
-	ObjLiteral
-	ListLiteral
-)
-
-var InitialLiterals = []Literal{
-	{BoolLiteral, false},
-	{BoolLiteral, true},
-}
-
-type Literal struct {
-	LiteralType LiteralType
-	Value       any
-}
-
 func (p *Parser) parseAll() ([]Bytecode, error) {
 	bytecode := make([]Bytecode, 0)
 
@@ -103,7 +80,7 @@ func (p *Parser) parseTopLevel() ([]Bytecode, error) {
 
 		p.Literals = append(p.Literals, Literal{
 			LiteralType: RefLiteral,
-			Value:       identifierToken.Value,
+			Value:       ReferenceDeclaration{Reference: string(identifierToken.Value), Dynamic: false},
 		})
 
 		literalIdx, err := encodeLen(len(p.Literals) - 1)
@@ -181,7 +158,7 @@ func (p *Parser) parseExpression() ([]Bytecode, error) {
 
 				p.Literals = append(p.Literals, Literal{
 					LiteralType: RefLiteral,
-					Value:       functionNameToken.Value,
+					Value:       ReferenceDeclaration{Reference: string(functionNameToken.Value), Dynamic: false},
 				})
 
 				functionName, err = encodeLen(len(p.Literals) - 1)
@@ -401,7 +378,7 @@ func (p *Parser) parsePrimary() ([]Bytecode, error) {
 
 		p.Literals = append(p.Literals, Literal{
 			LiteralType: RefLiteral,
-			Value:       string(currentToken.Value),
+			Value:       ReferenceDeclaration{Reference: string(currentToken.Value), Dynamic: false},
 		})
 
 		literalIdx, err := encodeLen(len(p.Literals) - 1)
@@ -555,8 +532,6 @@ func (p *Parser) advance() (Token, error) {
 
 	token, err := p.Scanner.Next()
 
-	println(err)
-
 	if err != nil {
 		return Token{}, err
 	}
@@ -580,6 +555,11 @@ const (
 	DECLARE_LET Bytecode = iota
 	DECLARE_FUN
 )
+
+type ReferenceDeclaration struct {
+	Reference string
+	Dynamic bool
+}
 
 type FunctionDeclaration struct {
 	Params [][]rune

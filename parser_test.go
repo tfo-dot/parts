@@ -234,6 +234,23 @@ func TestNamedFunctionWithTwoArg(t *testing.T) {
 	}
 }
 
+func TestObjectDeclaration(t *testing.T) {
+	parser := GetParserWithSource("let x = |> <|")
+
+	bytecode, err := parser.next()
+
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+
+	expectedBytecode := []Bytecode{
+		B_DECLARE, DECLARE_LET, Bytecode(len(InitialLiterals)), Bytecode(len(InitialLiterals)) + 1,
+	}
+
+	CheckBytecode(t, bytecode, expectedBytecode)
+}
+
 func TestObjectNoEntires(t *testing.T) {
 	parser := GetParserWithSource("|> <|")
 
@@ -463,6 +480,10 @@ func GetParserLiteral(p Parser, literalType LiteralType, val any) (int, Literal)
 	for idx, literal := range p.Literals {
 		if literal.LiteralType != literalType {
 			continue
+		}
+
+		if literalType == RefLiteral && literal.Value.(ReferenceDeclaration).Reference == val {
+			return idx, literal		
 		}
 
 		if literal.Value != val && val != nil {

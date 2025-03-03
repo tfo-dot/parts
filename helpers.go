@@ -42,7 +42,7 @@ func GetVMWithSource(source string) (*VM, error) {
 	return &VM{
 		Enviroment: &VMEnviroment{
 			Enclosing: nil,
-			Values:    make(map[string]any),
+			Values:    make(map[string]Literal),
 		},
 		Idx:      0,
 		Code:     code,
@@ -52,37 +52,138 @@ func GetVMWithSource(source string) (*VM, error) {
 }
 
 func ReadFromParts[T any](vm *VM, out *T) {
+	for i := range reflect.TypeOf(*out).NumField() {
+		FillField(i, vm, out)
+	}
+}
+
+func FillField[T any](fieldIdx int, vm *VM, out *T) {
 	outStruct := reflect.TypeOf(*out)
 
-	for i := range outStruct.NumField() {
-		field := outStruct.Field(i)
+	field := outStruct.Field(fieldIdx)
 
-		key, has := field.Tag.Lookup("parts")
+	fieldValue := reflect.ValueOf(out).Elem().Field(fieldIdx)
 
-		if !has {
-			key = field.Name
+	key := field.Name
+
+	if tag, has := field.Tag.Lookup("parts"); has {
+		key = tag
+	}
+
+	rawVal, err := vm.Enviroment.resolve(fmt.Sprintf("RT%s", key))
+
+	if err != nil {
+		panic(err)
+	}
+
+	val, err := rawVal.ToGoTypes(vm)
+
+	switch field.Type.Kind() {
+	case reflect.Bool:
+		fieldValue.SetBool(val.(bool))
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		fieldValue.SetInt(int64(val.(int)))
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		fieldValue.SetUint(uint64(val.(int)))
+	case reflect.Float32, reflect.Float64:
+		fieldValue.SetFloat(val.(float64))
+	case reflect.String:
+		fieldValue.SetString(val.(string))
+	case reflect.Slice:
+		if rawVal.LiteralType == ParsedListLiteral {
+			FillSlice(fieldIdx, val.([]any), vm, out)
+		} else {
+			panic(errors.New("trying to assign element as list"))
+		}
+	case reflect.Struct:
+		if rawVal.LiteralType == ParsedObjLiteral {
+			FillStruct(val.(map[string]any), vm, fieldValue.Addr().Interface())
+		} else {
+			panic(errors.New("wrong variable type"))
 		}
 
-		val, err := vm.Enviroment.resolve(fmt.Sprintf("RT%s", key))
+	default:
+		//TODO handle function type
+		fmt.Printf("%s type not supported - ignoring\n", field.Type.Kind().String())
+	}
+}
 
-		if err != nil {
-			panic(err)
+func FillStruct[T any](data map[string]any, vm *VM, out T) {
+	outStruct := reflect.ValueOf(out).Elem()
+	outType := outStruct.Type()
+
+	println(outType.Kind())
+
+	for i := 0; i < outType.NumField(); i++ {
+		field := outType.Field(i)
+		key := field.Name
+
+		if tag, has := field.Tag.Lookup("parts"); has {
+			key = tag
 		}
 
-		valueType := val.(Literal).LiteralType
+		if val, ok := data[fmt.Sprintf("RT%s", key)]; ok {
+			fieldValue := reflect.ValueOf(out).Elem().Field(i)
 
-		switch valueType {
-		case IntLiteral:
-			reflect.ValueOf(out).Elem().Field(i).SetInt(int64(val.(Literal).Value.(int)))
-		case DoubleLiteral:
-			reflect.ValueOf(out).Elem().Field(i).SetFloat(float64(val.(Literal).Value.(float32)))
-		case BoolLiteral:
-			reflect.ValueOf(out).Elem().Field(i).SetBool(val.(Literal).Value.(bool))
-		case StringLiteral:
-			reflect.ValueOf(out).Elem().Field(i).SetString(val.(Literal).Value.(string))
-		//TODO handle rest of the objects
-		default:
-			reflect.ValueOf(out).Elem().Field(i).SetZero()
+			switch field.Type.Kind() {
+			case reflect.Bool:
+				fieldValue.SetBool(val.(bool))
+			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+				fieldValue.SetInt(int64(val.(int)))
+			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+				fieldValue.SetUint(uint64(val.(int)))
+			case reflect.Float32, reflect.Float64:
+				fieldValue.SetFloat(val.(float64))
+			case reflect.String:
+				fieldValue.SetString(val.(string))
+			case reflect.Slice:
+				if val, ok := val.([]any); ok {
+					FillSlice(i, val, vm, out)
+				} else {
+					panic(errors.New("trying to assign element as list"))
+				}
+
+			case reflect.Struct:
+				if val, ok := val.(map[string]any); ok {
+					FillStruct(val, vm, fieldValue.Addr().Interface())
+				} else {
+					panic(errors.New("wrong variable type"))
+				}
+
+			default:
+				//TODO handle function type
+				fmt.Printf("%s type not supported - ignoring\n", field.Type.Kind().String())
+			}
 		}
 	}
+}
+
+func FillSlice[T any](fieldIdx int, data []any, vm *VM, out T) {
+	fieldValue := reflect.ValueOf(out).Elem().Field(fieldIdx)
+
+	if fieldValue.Kind() == reflect.Slice && fieldValue.Type().Elem().Kind() == reflect.Struct {
+		newSlice := reflect.MakeSlice(fieldValue.Type(), 0, len(data))
+
+		for i := 0; i < len(data); i++ {
+			newStruct := reflect.New(fieldValue.Type().Elem()).Elem()
+
+			if val, ok := data[i].(map[string]any); ok {
+				FillStruct(val, vm, newStruct.Addr().Interface())
+			} else {
+				panic(errors.New("wrong variable type"))
+			}
+
+			newSlice = reflect.Append(newSlice, newStruct)
+		}
+
+		return
+	}
+
+	newSlice := reflect.MakeSlice(fieldValue.Type(), 0, len(data))
+
+	for i := 0; i < len(data); i++ {
+		newSlice = reflect.Append(newSlice, reflect.ValueOf(data[i]))
+	}
+
+	fieldValue.Set(newSlice)
 }
