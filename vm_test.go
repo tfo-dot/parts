@@ -220,3 +220,35 @@ func TestHelperJoined(t *testing.T) {
 		}
 	}
 }
+
+func TestDot(t *testing.T) {
+	type TestStruct struct {
+		Val int
+	}
+
+	vm, err := GetVMWithSource(`
+		let obj = |> key: 123 <|
+		let Val = obj.key `)
+
+		if err != nil {
+		t.Error(err)
+		return
+	}
+
+	err = vm.Run()
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var testStruct TestStruct
+
+	ReadFromParts(vm, &testStruct)
+
+	if testStruct.Val != 123 {
+		t.Errorf("field value didn't matched got (%d) expected (%d)", testStruct.Val, 123)
+		return
+	}
+
+}

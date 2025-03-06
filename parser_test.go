@@ -8,41 +8,37 @@ import (
 func TestLetFalse(t *testing.T) {
 	parser := GetParserWithSource("let x = false;")
 
-	bytecode, err := parser.next()
+	bytecode, err := parser.parse()
 
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
 		return
 	}
 
-	expectedBytecode := []Bytecode{
-		B_DECLARE, DECLARE_LET, Bytecode(len(InitialLiterals)), 0,
-	}
-
-	CheckBytecode(t, bytecode, expectedBytecode)
+	CheckBytecode(t, bytecode, []Bytecode{
+		B_DECLARE, B_LITERAL, Bytecode(len(InitialLiterals)), 0,
+	})
 }
 
 func TestLetTrue(t *testing.T) {
 	parser := GetParserWithSource("let x = true;")
 
-	bytecode, err := parser.next()
+	bytecode, err := parser.parse()
 
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
 		return
 	}
 
-	expectedBytecode := []Bytecode{
-		B_DECLARE, DECLARE_LET, Bytecode(len(InitialLiterals)), 1,
-	}
-
-	CheckBytecode(t, bytecode, expectedBytecode)
+	CheckBytecode(t, bytecode, []Bytecode{
+		B_DECLARE, B_LITERAL, Bytecode(len(InitialLiterals)), 1,
+	})
 }
 
 func TestLetNumber(t *testing.T) {
 	parser := GetParserWithSource("let x = 123;")
 
-	bytecode, err := parser.next()
+	bytecode, err := parser.parse()
 
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
@@ -50,7 +46,7 @@ func TestLetNumber(t *testing.T) {
 	}
 
 	expectedBytecode := []Bytecode{
-		B_DECLARE, DECLARE_LET, Bytecode(len(InitialLiterals)), Bytecode(len(InitialLiterals)) + 1,
+		B_DECLARE, B_LITERAL, Bytecode(len(InitialLiterals)), B_LITERAL, Bytecode(len(InitialLiterals)) + 1,
 	}
 
 	CheckBytecode(t, bytecode, expectedBytecode)
@@ -59,7 +55,7 @@ func TestLetNumber(t *testing.T) {
 func TestLetString(t *testing.T) {
 	parser := GetParserWithSource("let x = \"f\";")
 
-	bytecode, err := parser.next()
+	bytecode, err := parser.parse()
 
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
@@ -67,7 +63,7 @@ func TestLetString(t *testing.T) {
 	}
 
 	expectedBytecode := []Bytecode{
-		B_DECLARE, DECLARE_LET, Bytecode(len(InitialLiterals)), Bytecode(len(InitialLiterals)) + 1,
+		B_DECLARE, B_LITERAL, Bytecode(len(InitialLiterals)), B_LITERAL, Bytecode(len(InitialLiterals)) + 1,
 	}
 
 	CheckBytecode(t, bytecode, expectedBytecode)
@@ -76,53 +72,53 @@ func TestLetString(t *testing.T) {
 func TestParenthesis(t *testing.T) {
 	parser := GetParserWithSource("(1);")
 
-	bytecode, err := parser.next()
+	bytecode, err := parser.parse()
 
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
 		return
 	}
 
-	CheckBytecode(t, bytecode, []Bytecode{Bytecode(len(InitialLiterals))})
+	CheckBytecode(t, bytecode, []Bytecode{B_LITERAL, Bytecode(len(InitialLiterals))})
 }
 
 func TestBlock(t *testing.T) {
 	parser := GetParserWithSource("{0};")
 
-	bytecode, err := parser.next()
+	bytecode, err := parser.parse()
 
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
 		return
 	}
 
-	CheckBytecode(t, bytecode, []Bytecode{B_NEW_SCOPE, Bytecode(len(InitialLiterals)), B_END_SCOPE})
+	CheckBytecode(t, bytecode, []Bytecode{B_NEW_SCOPE, B_LITERAL, Bytecode(len(InitialLiterals)), B_END_SCOPE})
 }
 
 func TestAnonymousFunctionNoBody(t *testing.T) {
 	parser := GetParserWithSource("fun () {}")
 
-	bytecode, err := parser.next()
+	bytecode, err := parser.parse()
 
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
 		return
 	}
 
-	CheckBytecode(t, bytecode, []Bytecode{Bytecode(len(InitialLiterals))})
+	CheckBytecode(t, bytecode, []Bytecode{B_LITERAL, Bytecode(len(InitialLiterals))})
 }
 
 func TestAnonymousFunctionWithBody(t *testing.T) {
 	parser := GetParserWithSource("fun () { 0 }")
 
-	bytecode, err := parser.next()
+	bytecode, err := parser.parse()
 
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
 		return
 	}
 
-	checkResult := CheckBytecode(t, bytecode, []Bytecode{Bytecode(len(InitialLiterals) + 1)})
+	checkResult := CheckBytecode(t, bytecode, []Bytecode{B_LITERAL, Bytecode(len(InitialLiterals) + 1)})
 
 	if !checkResult {
 		return
@@ -130,33 +126,33 @@ func TestAnonymousFunctionWithBody(t *testing.T) {
 		t.Log("Got through first check")
 	}
 
-	CheckBytecode(t, (parser.Literals[len(parser.Literals)-1].Value).(FunctionDeclaration).Body, []Bytecode{B_NEW_SCOPE, Bytecode(len(InitialLiterals)), B_END_SCOPE})
+	CheckBytecode(t, (parser.Literals[len(parser.Literals)-1].Value).(FunctionDeclaration).Body, []Bytecode{B_NEW_SCOPE, B_LITERAL, Bytecode(len(InitialLiterals)), B_END_SCOPE})
 }
 
 func TestNamedFunctionNoBody(t *testing.T) {
 	parser := GetParserWithSource("fun x() {}")
 
-	bytecode, err := parser.next()
+	bytecode, err := parser.parse()
 
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
 		return
 	}
 
-	CheckBytecode(t, bytecode, []Bytecode{B_DECLARE, DECLARE_FUN, Bytecode(len(InitialLiterals)), Bytecode(len(InitialLiterals) + 1)})
+	CheckBytecode(t, bytecode, []Bytecode{B_DECLARE, B_LITERAL, Bytecode(len(InitialLiterals)), B_LITERAL, Bytecode(len(InitialLiterals) + 1)})
 }
 
 func TestNamedFunctionWithBody(t *testing.T) {
 	parser := GetParserWithSource("fun x() { 0 }")
 
-	bytecode, err := parser.next()
+	bytecode, err := parser.parse()
 
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
 		return
 	}
 
-	checkResult := CheckBytecode(t, bytecode, []Bytecode{B_DECLARE, DECLARE_FUN, Bytecode(len(InitialLiterals)), Bytecode(len(InitialLiterals) + 2)})
+	checkResult := CheckBytecode(t, bytecode, []Bytecode{B_DECLARE, B_LITERAL, Bytecode(len(InitialLiterals)), B_LITERAL, Bytecode(len(InitialLiterals) + 2)})
 
 	if !checkResult {
 		return
@@ -164,20 +160,20 @@ func TestNamedFunctionWithBody(t *testing.T) {
 		t.Log("Got through first check")
 	}
 
-	CheckBytecode(t, (parser.Literals[len(parser.Literals)-1].Value).(FunctionDeclaration).Body, []Bytecode{B_NEW_SCOPE, Bytecode(len(InitialLiterals) + 1), B_END_SCOPE})
+	CheckBytecode(t, (parser.Literals[len(parser.Literals)-1].Value).(FunctionDeclaration).Body, []Bytecode{B_NEW_SCOPE, B_LITERAL, Bytecode(len(InitialLiterals) + 1), B_END_SCOPE})
 }
 
 func TestNamedFunctionWithArg(t *testing.T) {
 	parser := GetParserWithSource("fun x(one) { }")
 
-	bytecode, err := parser.next()
+	bytecode, err := parser.parse()
 
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
 		return
 	}
 
-	checkResult := CheckBytecode(t, bytecode, []Bytecode{B_DECLARE, DECLARE_FUN, Bytecode(len(InitialLiterals)), Bytecode(len(InitialLiterals) + 1)})
+	checkResult := CheckBytecode(t, bytecode, []Bytecode{B_DECLARE, B_LITERAL, Bytecode(len(InitialLiterals)), B_LITERAL, Bytecode(len(InitialLiterals) + 1)})
 
 	if !checkResult {
 		return
@@ -201,14 +197,14 @@ func TestNamedFunctionWithArg(t *testing.T) {
 func TestNamedFunctionWithTwoArg(t *testing.T) {
 	parser := GetParserWithSource("fun x(one, two) { }")
 
-	bytecode, err := parser.next()
+	bytecode, err := parser.parse()
 
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
 		return
 	}
 
-	checkResult := CheckBytecode(t, bytecode, []Bytecode{B_DECLARE, DECLARE_FUN, Bytecode(len(InitialLiterals)), Bytecode(len(InitialLiterals) + 1)})
+	checkResult := CheckBytecode(t, bytecode, []Bytecode{B_DECLARE, B_LITERAL, Bytecode(len(InitialLiterals)), B_LITERAL, Bytecode(len(InitialLiterals) + 1)})
 
 	if !checkResult {
 		return
@@ -237,7 +233,7 @@ func TestNamedFunctionWithTwoArg(t *testing.T) {
 func TestObjectDeclaration(t *testing.T) {
 	parser := GetParserWithSource("let x = |> <|")
 
-	bytecode, err := parser.next()
+	bytecode, err := parser.parse()
 
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
@@ -245,7 +241,7 @@ func TestObjectDeclaration(t *testing.T) {
 	}
 
 	expectedBytecode := []Bytecode{
-		B_DECLARE, DECLARE_LET, Bytecode(len(InitialLiterals)), Bytecode(len(InitialLiterals)) + 1,
+		B_DECLARE, B_LITERAL, Bytecode(len(InitialLiterals)), B_LITERAL, Bytecode(len(InitialLiterals)) + 1,
 	}
 
 	CheckBytecode(t, bytecode, expectedBytecode)
@@ -254,20 +250,20 @@ func TestObjectDeclaration(t *testing.T) {
 func TestObjectNoEntires(t *testing.T) {
 	parser := GetParserWithSource("|> <|")
 
-	bytecode, err := parser.next()
+	bytecode, err := parser.parse()
 
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
 		return
 	}
 
-	CheckBytecode(t, bytecode, []Bytecode{Bytecode(len(InitialLiterals))})
+	CheckBytecode(t, bytecode, []Bytecode{B_LITERAL, Bytecode(len(InitialLiterals))})
 }
 
 func TestObjectWithIntEntry(t *testing.T) {
 	parser := GetParserWithSource("|> 1 : 0 <|")
 
-	_, err := parser.next()
+	_, err := parser.parse()
 
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
@@ -316,13 +312,13 @@ func TestObjectWithIntEntry(t *testing.T) {
 		return
 	}
 
-	CheckBytecode(t, objDef[0], append(encodedOneOffset, encodedZeroOffset...))
+	CheckBytecode(t, objDef[0], append(append(append([]Bytecode{B_LITERAL}, encodedOneOffset...), B_LITERAL), encodedZeroOffset...))
 }
 
 func TestMeta(t *testing.T) {
 	parser := GetParserWithSource("#>\"random\": \"value\"")
 
-	bytecode, err := parser.next()
+	bytecode, err := parser.parse()
 
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
@@ -343,14 +339,14 @@ func TestMeta(t *testing.T) {
 func TestArray(t *testing.T) {
 	parser := GetParserWithSource("[\"a\", 1]")
 
-	bytecode, err := parser.next()
+	bytecode, err := parser.parse()
 
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
 		return
 	}
 
-	test := CheckBytecode(t, bytecode, []Bytecode{Bytecode(len(InitialLiterals) + 2)})
+	test := CheckBytecode(t, bytecode, []Bytecode{B_LITERAL, Bytecode(len(InitialLiterals) + 2)})
 
 	if !test {
 		return
@@ -375,7 +371,7 @@ func TestArray(t *testing.T) {
 		return
 	}
 
-	test = CheckBytecode(t, arr.Entries[0], mustEncodeLen(strIdx))
+	test = CheckBytecode(t, arr.Entries[0], append([]Bytecode{B_LITERAL}, mustEncodeLen(strIdx)...))
 
 	if !test {
 		return
@@ -393,7 +389,7 @@ func TestArray(t *testing.T) {
 		return
 	}
 
-	test = CheckBytecode(t, arr.Entries[1], mustEncodeLen(intIdx))
+	test = CheckBytecode(t, arr.Entries[1], append([]Bytecode{B_LITERAL}, mustEncodeLen(intIdx)...))
 
 	if !test {
 		return
@@ -403,7 +399,7 @@ func TestArray(t *testing.T) {
 func TestDotExpression(t *testing.T) {
 	parser := GetParserWithSource("val.key")
 
-	bytecode, err := parser.next()
+	bytecode, err := parser.parse()
 
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
@@ -424,13 +420,13 @@ func TestDotExpression(t *testing.T) {
 		return
 	}
 
-	CheckBytecode(t, bytecode, append(append([]Bytecode{B_DOT}, mustEncodeLen(idxVal)...), mustEncodeLen(idxKey)...))
+	CheckBytecode(t, bytecode, append(append(append([]Bytecode{B_DOT, B_LITERAL}, mustEncodeLen(idxVal)...), B_LITERAL), mustEncodeLen(idxKey)...))
 }
 
 func TestDotNestedExpression(t *testing.T) {
 	parser := GetParserWithSource("(obj.val).key")
 
-	bytecode, err := parser.next()
+	bytecode, err := parser.parse()
 
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
@@ -444,7 +440,6 @@ func TestDotNestedExpression(t *testing.T) {
 		return
 	}
 
-
 	idxVal, _ := GetParserLiteral(parser, RefLiteral, "val")
 
 	if idxVal == -1 {
@@ -459,7 +454,7 @@ func TestDotNestedExpression(t *testing.T) {
 		return
 	}
 
-	CheckBytecode(t, bytecode, append(append(append([]Bytecode{B_DOT, B_DOT}, mustEncodeLen(idxObj)...), mustEncodeLen(idxVal)...),  mustEncodeLen(idxKey)...))
+	CheckBytecode(t, bytecode, append(append(append(append(append([]Bytecode{B_DOT, B_DOT, B_LITERAL}, mustEncodeLen(idxObj)...), B_LITERAL), mustEncodeLen(idxVal)...), B_LITERAL), mustEncodeLen(idxKey)...))
 }
 
 func CheckBytecode(t *testing.T, result []Bytecode, expected []Bytecode) bool {
@@ -483,7 +478,7 @@ func GetParserLiteral(p Parser, literalType LiteralType, val any) (int, Literal)
 		}
 
 		if literalType == RefLiteral && literal.Value.(ReferenceDeclaration).Reference == val {
-			return idx, literal		
+			return idx, literal
 		}
 
 		if literal.Value != val && val != nil {

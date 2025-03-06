@@ -27,7 +27,7 @@ func (p *Parser) parseAll() ([]Bytecode, error) {
 	bytecode := make([]Bytecode, 0)
 
 	for !(p.LastToken.Type == TokenInvalid && string(p.LastToken.Value) == "EOF") {
-		temp, err := p.next()
+		temp, err := p.parse()
 
 		if err != nil {
 			return []Bytecode{}, errors.Join(errors.New("got error while parsing whole code"), err)
@@ -37,10 +37,6 @@ func (p *Parser) parseAll() ([]Bytecode, error) {
 	}
 
 	return bytecode, nil
-}
-
-func (p *Parser) next() ([]Bytecode, error) {
-	return p.parse()
 }
 
 func (p *Parser) parseInScope(wantedScope Scope) ([]Bytecode, error) {
@@ -78,12 +74,10 @@ func (p *Parser) parseTopLevel() ([]Bytecode, error) {
 			return []Bytecode{}, errors.New("got invalid token instead of identifier")
 		}
 
-		p.Literals = append(p.Literals, Literal{
+		literalCode, err := p.AppendLiteral(Literal{
 			LiteralType: RefLiteral,
 			Value:       ReferenceDeclaration{Reference: string(identifierToken.Value), Dynamic: false},
 		})
-
-		literalIdx, err := encodeLen(len(p.Literals) - 1)
 
 		if err != nil {
 			return []Bytecode{}, errors.Join(errors.New("got error while writing literal offset"), err)
@@ -101,7 +95,7 @@ func (p *Parser) parseTopLevel() ([]Bytecode, error) {
 			initialValue = value
 		}
 
-		return append(append([]Bytecode{B_DECLARE, DECLARE_LET}, literalIdx...), initialValue...), nil
+		return append(append([]Bytecode{B_DECLARE}, literalCode...), initialValue...), nil
 	}
 
 	if p.matchOperator("META") {
@@ -116,7 +110,7 @@ func (p *Parser) parseTopLevel() ([]Bytecode, error) {
 		}
 
 		if !p.matchOperator("COLON") {
-			return []Bytecode{}, errors.New("missing are valid meta keys")
+			return []Bytecode{}, errors.New("missing ':' after meta key")
 		}
 
 		metaValueToken, err := p.peek()
@@ -156,12 +150,10 @@ func (p *Parser) parseExpression() ([]Bytecode, error) {
 					return []Bytecode{}, errors.Join(errors.New("got error while parsing identifier name"), err)
 				}
 
-				p.Literals = append(p.Literals, Literal{
+				functionName, err = p.AppendLiteral(Literal{
 					LiteralType: RefLiteral,
 					Value:       ReferenceDeclaration{Reference: string(functionNameToken.Value), Dynamic: false},
 				})
-
-				functionName, err = encodeLen(len(p.Literals) - 1)
 
 				if err != nil {
 					return []Bytecode{}, errors.Join(errors.New("got error while encoding identifier literal"), err)
@@ -230,9 +222,7 @@ func (p *Parser) parseExpression() ([]Bytecode, error) {
 			declaration.Body = body
 		}
 
-		p.Literals = append(p.Literals, Literal{FunLiteral, declaration})
-
-		idx, err := encodeLen(len(p.Literals) - 1)
+		idx, err := p.AppendLiteral(Literal{FunLiteral, declaration})
 
 		if err != nil {
 			return []Bytecode{}, errors.Join(errors.New("encountered err in length encoding"), err)
@@ -241,7 +231,7 @@ func (p *Parser) parseExpression() ([]Bytecode, error) {
 		if len(functionName) == 0 {
 			return idx, nil
 		} else {
-			return append(append([]Bytecode{B_DECLARE, DECLARE_FUN}, functionName...), idx...), nil
+			return append(append([]Bytecode{B_DECLARE}, functionName...), idx...), nil
 		}
 	}
 
@@ -275,6 +265,40 @@ func (p *Parser) parseExpression() ([]Bytecode, error) {
 		}
 
 		break
+	}
+
+	if p.matchOperator("LEFT_PAREN") {
+		argsCount := 0
+		arguments := make([]Bytecode, 0)
+		token, err := p.peek()
+
+		if err != nil {
+			return []Bytecode{}, errors.Join(errors.New("got error while reading call operation arguments"), err)
+		}
+
+		if token.Type != TokenOperator && string(token.Value) != "RIGHT_PAREN" {
+			for cond := true; cond; cond = p.matchOperator("COMMA") {
+				arg, err := p.parseExpression()
+
+				if err != nil {
+
+				}
+
+				arguments = append(arguments, arg...)
+			}
+		}
+
+		if !p.matchOperator("RIGHT_PAREN") {
+			token, err := p.peek()
+
+			if err != nil {
+				return []Bytecode{}, errors.Join(errors.New("got error wihle reading call operation arguments"), err)
+			}
+
+			return []Bytecode{}, fmt.Errorf("expected ')' after call arguments got '%s'", string(token.Value))
+		}
+
+		rVal = append(append(append([]Bytecode{B_CALL}, rVal...), Bytecode(argsCount)), arguments...)
 	}
 
 	p.matchOperator("SEMICOLON")
@@ -342,12 +366,10 @@ func (p *Parser) parsePrimary() ([]Bytecode, error) {
 			return []Bytecode{}, errors.Join(errors.New("encountered wrong format for number"), err)
 		}
 
-		p.Literals = append(p.Literals, Literal{
+		literalIdx, err := p.AppendLiteral(Literal{
 			LiteralType: IntLiteral,
 			Value:       val,
 		})
-
-		literalIdx, err := encodeLen(len(p.Literals) - 1)
 
 		if err != nil {
 			return []Bytecode{}, errors.Join(errors.New("got error while encoding length"), err)
@@ -359,12 +381,10 @@ func (p *Parser) parsePrimary() ([]Bytecode, error) {
 	if currentToken.Type == TokenString {
 		p.advance()
 
-		p.Literals = append(p.Literals, Literal{
+		literalIdx, err := p.AppendLiteral(Literal{
 			LiteralType: StringLiteral,
 			Value:       string(currentToken.Value),
 		})
-
-		literalIdx, err := encodeLen(len(p.Literals) - 1)
 
 		if err != nil {
 			return []Bytecode{}, errors.Join(errors.New("got error while encoding length"), err)
@@ -376,12 +396,10 @@ func (p *Parser) parsePrimary() ([]Bytecode, error) {
 	if currentToken.Type == TokenIdentifier {
 		p.advance()
 
-		p.Literals = append(p.Literals, Literal{
+		literalIdx, err := p.AppendLiteral(Literal{
 			LiteralType: RefLiteral,
 			Value:       ReferenceDeclaration{Reference: string(currentToken.Value), Dynamic: false},
 		})
-
-		literalIdx, err := encodeLen(len(p.Literals) - 1)
 
 		if err != nil {
 			return []Bytecode{}, errors.Join(errors.New("got error while encoding length"), err)
@@ -441,12 +459,10 @@ func (p *Parser) parsePrimary() ([]Bytecode, error) {
 			}
 		}
 
-		p.Literals = append(p.Literals, Literal{
+		literalIdx, err := p.AppendLiteral(Literal{
 			LiteralType: ObjLiteral,
 			Value:       ObjDefinition{Entries: entries},
 		})
-
-		literalIdx, err := encodeLen(len(p.Literals) - 1)
 
 		if err != nil {
 			return []Bytecode{}, errors.Join(errors.New("got error while encoding length"), err)
@@ -472,12 +488,10 @@ func (p *Parser) parsePrimary() ([]Bytecode, error) {
 			return []Bytecode{}, errors.New("expected ']' after array elements")
 		}
 
-		p.Literals = append(p.Literals, Literal{
+		literalIdx, err := p.AppendLiteral(Literal{
 			LiteralType: ListLiteral,
 			Value:       ListDefinition{Entries: elements},
 		})
-
-		literalIdx, err := encodeLen(len(p.Literals) - 1)
 
 		if err != nil {
 			return []Bytecode{}, errors.Join(errors.New("got error while encoding length"), err)
@@ -545,20 +559,17 @@ type Bytecode byte
 
 const (
 	B_DECLARE Bytecode = iota
+	B_LITERAL
 	B_RETURN
 	B_NEW_SCOPE
 	B_END_SCOPE
 	B_DOT
-)
-
-const (
-	DECLARE_LET Bytecode = iota
-	DECLARE_FUN
+	B_CALL
 )
 
 type ReferenceDeclaration struct {
 	Reference string
-	Dynamic bool
+	Dynamic   bool
 }
 
 type FunctionDeclaration struct {
@@ -572,6 +583,18 @@ type ObjDefinition struct {
 
 type ListDefinition struct {
 	Entries [][]Bytecode
+}
+
+func (p *Parser) AppendLiteral(literal Literal) ([]Bytecode, error) {
+	p.Literals = append(p.Literals, literal)
+
+	encoded, err := encodeLen(len(p.Literals) - 1)
+
+		if err != nil {
+		return []Bytecode{}, errors.Join(errors.New("got error while appending literal"), err)
+	}
+
+	return append([]Bytecode{B_LITERAL}, encoded...), nil
 }
 
 func encodeLen(num int) ([]Bytecode, error) {
