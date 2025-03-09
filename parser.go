@@ -204,7 +204,7 @@ func (p *Parser) parseExpression() ([]Bytecode, error) {
 			return []Bytecode{}, fmt.Errorf("expected ')' after function params got '%s'", string(token.Value))
 		}
 
-		if p.matchOperator("EQUAL") {
+		if p.matchOperator("EQUALS") {
 			expr, err := p.parseExpression()
 
 			if err != nil {
@@ -248,7 +248,13 @@ func (p *Parser) parseExpression() ([]Bytecode, error) {
 	rVal, rErr := p.parsePrimary()
 
 	if rErr != nil {
-		return []Bytecode{}, rErr
+		_, err := p.peek()
+
+		if err != nil {
+			panic(err)
+		}
+
+		return []Bytecode{}, errors.Join(errors.New("got error while parsing primary expression"), rErr)
 	}
 
 	for {
@@ -262,6 +268,24 @@ func (p *Parser) parseExpression() ([]Bytecode, error) {
 			rVal = append(append([]Bytecode{B_DOT}, rVal...), accessor...)
 
 			continue
+		}
+
+		break
+	}
+
+	for {
+		if p.matchOperator("LEFT_BRACKET") {
+			elt, err := p.parseExpression()
+
+			if err != nil {
+				return []Bytecode{}, errors.Join(errors.New("expected expression, got error"), err)
+			}
+
+			if !p.matchOperator("RIGHT_BRACKET") {
+				return []Bytecode{}, errors.New("expected ']' after index operator")
+			}
+
+			rVal = append(append(append([]Bytecode{B_DOT}, rVal...), B_RESOLVE), elt...)
 		}
 
 		break
@@ -281,10 +305,11 @@ func (p *Parser) parseExpression() ([]Bytecode, error) {
 				arg, err := p.parseExpression()
 
 				if err != nil {
-
+					return []Bytecode{}, errors.Join(errors.New("got error while reading call operation arguments"), err)
 				}
 
 				arguments = append(arguments, arg...)
+				argsCount++
 			}
 		}
 
@@ -299,6 +324,16 @@ func (p *Parser) parseExpression() ([]Bytecode, error) {
 		}
 
 		rVal = append(append(append([]Bytecode{B_CALL}, rVal...), Bytecode(argsCount)), arguments...)
+	}
+
+	if p.matchOperator("EQUALS") {
+		expr, err := p.parseExpression()
+
+		if err != nil {
+			return []Bytecode{}, errors.Join(errors.New("got error while resolving assign expression"), err)
+		}
+
+		return append(append([]Bytecode{B_SET}, rVal...), expr...), nil
 	}
 
 	p.matchOperator("SEMICOLON")
@@ -559,12 +594,14 @@ type Bytecode byte
 
 const (
 	B_DECLARE Bytecode = iota
+	B_SET
 	B_LITERAL
 	B_RETURN
 	B_NEW_SCOPE
 	B_END_SCOPE
 	B_DOT
 	B_CALL
+	B_RESOLVE
 )
 
 type ReferenceDeclaration struct {
@@ -586,15 +623,39 @@ type ListDefinition struct {
 }
 
 func (p *Parser) AppendLiteral(literal Literal) ([]Bytecode, error) {
-	p.Literals = append(p.Literals, literal)
+	existingIdx := -1
 
-	encoded, err := encodeLen(len(p.Literals) - 1)
+	if literal.LiteralType != ObjLiteral && literal.LiteralType != ListLiteral {
+		for idx, existingLiteral := range p.Literals {
+			if existingLiteral.LiteralType != literal.LiteralType {
+				continue
+			}
 
-		if err != nil {
-		return []Bytecode{}, errors.Join(errors.New("got error while appending literal"), err)
+			if existingLiteral.Value == literal.Value {
+				existingIdx = idx
+			}
+		}
 	}
 
-	return append([]Bytecode{B_LITERAL}, encoded...), nil
+	if existingIdx == -1 {
+		p.Literals = append(p.Literals, literal)
+
+		encoded, err := encodeLen(len(p.Literals) - 1)
+
+		if err != nil {
+			return []Bytecode{}, errors.Join(errors.New("got error while encoding literal offset"), err)
+		}
+
+		return append([]Bytecode{B_LITERAL}, encoded...), nil
+	} else {
+		encoded, err := encodeLen(existingIdx)
+
+		if err != nil {
+			return []Bytecode{}, errors.Join(errors.New("got error while encoding literal offset"), err)
+		}
+
+		return append([]Bytecode{B_LITERAL}, encoded...), nil
+	}
 }
 
 func encodeLen(num int) ([]Bytecode, error) {

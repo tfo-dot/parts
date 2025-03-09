@@ -23,6 +23,11 @@ func (s *Scanner) Next() (Token, error) {
 		s.Index++
 	}
 
+	//Additional check if file ends with a space
+	if s.Peek() == 0 {
+		return Token{Type: TokenInvalid, Value: []rune("EOF")}, nil
+	}
+
 	peekValue := s.Peek()
 
 	if peekValue == '"' {

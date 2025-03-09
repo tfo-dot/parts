@@ -10,19 +10,16 @@ type VM struct {
 
 	Idx int
 
+	ReturnValue *Literal
+
 	//Filled from parser
 
 	Code     []Bytecode
-	Literals []Literal
+	Literals []*Literal
 	Meta     map[string]string
 }
 
 func (vm *VM) Run() error {
-
-	for i, l := range vm.Literals {
-		println(i, l.LiteralType, l.Value)
-	}
-
 	for vm.Idx < len(vm.Code) {
 		err := vm.Execute()
 
@@ -39,7 +36,7 @@ func (vm *VM) Execute() error {
 	case B_DECLARE:
 		vm.Idx++
 
-		exprType, nameLiteral, err := vm.runExpr()
+		exprType, nameLiteral, err := vm.runExpr(true)
 
 		if err != nil {
 			return errors.Join(errors.New("got error while running expression"), err)
@@ -49,19 +46,23 @@ func (vm *VM) Execute() error {
 			return errors.New("expected literal as variable name")
 		}
 
-		envKey, err := HashLiteral(nameLiteral.(Literal))
+		envKey, err := HashLiteral(*nameLiteral.(*Literal))
 
 		if err != nil {
 			return errors.Join(errors.New("got error while defining name hash"), err)
 		}
 
-		exprType, value, err := vm.runExpr()
+		exprType, value, err := vm.runExpr(true)
 
 		if err != nil {
 			return errors.Join(errors.New("got error while running variable value"), err)
 		}
 
-		simpleValue, err := vm.simplifyLiteral(value.(Literal), true)
+		if exprType != TypeLiteral {
+			return fmt.Errorf("expected value got %d (declare value)", exprType)
+		}
+
+		simpleValue, err := vm.simplifyLiteral(value.(*Literal), true)
 
 		if err != nil {
 			return errors.Join(errors.New("got error while simplyfing value"), err)
@@ -72,31 +73,12 @@ func (vm *VM) Execute() error {
 		if err != nil {
 			return errors.Join(errors.New("got error while defining variable"), err)
 		}
-	case B_NEW_SCOPE:
-		vm.Idx++
-
-		newEnv := VMEnviroment{
-			Values:    make(map[string]Literal),
-			Enclosing: vm.Enviroment,
-		}
-
-		vm.Enviroment = &newEnv
-	case B_END_SCOPE:
-		vm.Idx++
-
-		if vm.Enviroment.Enclosing == nil {
-			return errors.New("leaving scope but already at top level")
-		}
-
-		oldEnv := vm.Enviroment.Enclosing
-
-		vm.Enviroment = oldEnv
 	default:
 		if vm.Idx >= len(vm.Code) {
 			return errors.New("tried running bytecode after the end")
 		}
 
-		if _, _, err := vm.runExpr(); err != nil {
+		if _, _, err := vm.runExpr(true); err != nil {
 			return errors.Join(errors.New("got error while running bytecode"), err)
 		}
 	}
@@ -104,13 +86,13 @@ func (vm *VM) Execute() error {
 	return nil
 }
 
-func (vm *VM) runExpr() (ExpressionType, any, error) {
+func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 	switch vm.Code[vm.Idx] {
 	case B_NEW_SCOPE:
 		vm.Idx++
 
 		newEnv := VMEnviroment{
-			Values:    make(map[string]Literal),
+			Values:    make(map[string]*Literal),
 			Enclosing: vm.Enviroment,
 		}
 
@@ -139,20 +121,21 @@ func (vm *VM) runExpr() (ExpressionType, any, error) {
 		return TypeLiteral, vm.Literals[nameIdx], nil
 	case B_DOT:
 		vm.Idx++
-		exprType, rawAccessor, err := vm.runExpr()
+
+		exprType, rawAccessor, err := vm.runExpr(unwindDot)
 
 		if err != nil {
 			return UndefinedExpression, nil, errors.Join(errors.New("got error while running expression"), err)
 		}
 
-		if exprType != TypeLiteral {
-			return UndefinedExpression, nil, errors.Join(fmt.Errorf("expected value got %d", exprType), err)
+		if exprType != TypeLiteral && exprType != DotExpression {
+			return UndefinedExpression, nil, fmt.Errorf("expected value got %d (running dot accessor)", exprType)
 		}
 
-		accessor := rawAccessor.(Literal)
+		accessor := rawAccessor.(*Literal)
 
 		if accessor.LiteralType == RefLiteral {
-			valueHash, err := HashLiteral(accessor)
+			valueHash, err := HashLiteral(*accessor)
 
 			if err != nil {
 				return UndefinedExpression, nil, errors.Join(errors.New("got error while resolving reference"), err)
@@ -179,17 +162,36 @@ func (vm *VM) runExpr() (ExpressionType, any, error) {
 			}
 		}
 
-		exprType, rawKey, err := vm.runExpr()
+		exprType, rawKey, err := vm.runExpr(unwindDot)
 
 		if err != nil {
 			return UndefinedExpression, nil, errors.Join(errors.New("got error while running expression"), err)
 		}
 
-		if exprType != TypeLiteral {
-			return UndefinedExpression, nil, errors.Join(fmt.Errorf("expected value got %d", exprType), err)
+		if exprType != TypeLiteral && exprType != DotExpression {
+			return UndefinedExpression, nil, errors.Join(fmt.Errorf("expected value got %d (dot value)", exprType), err)
 		}
 
-		key, err := HashLiteral(rawKey.(Literal))
+		if !unwindDot {
+
+			resVal := make([]*Literal, 0)
+
+			if val, ok := rawAccessor.([]*Literal); ok {
+				resVal = append(resVal, val...)
+			} else {
+				resVal = append(resVal, rawAccessor.(*Literal))
+			}
+
+			if exprType == TypeLiteral {
+				resVal = append(resVal, rawKey.(*Literal))
+			} else {
+				resVal = append(resVal, rawKey.([]*Literal)...)
+			}
+
+			return DotExpression, resVal, nil
+		}
+
+		key, err := HashLiteral(*rawKey.(*Literal))
 
 		if err != nil {
 			return UndefinedExpression, nil, errors.Join(errors.New("got error while hashing key"), err)
@@ -200,6 +202,189 @@ func (vm *VM) runExpr() (ExpressionType, any, error) {
 		} else {
 			return UndefinedExpression, nil, fmt.Errorf("key not found: %s", key)
 		}
+	case B_RESOLVE:
+		vm.Idx++
+		exprType, expr, err := vm.runExpr(unwindDot)
+
+		if err != nil {
+			return UndefinedExpression, nil, errors.Join(errors.New("got error while running expression"), err)
+		}
+
+		if exprType != TypeLiteral && exprType != DotExpression {
+			return UndefinedExpression, nil, fmt.Errorf("expected value got %d (resolve)", exprType)
+		}
+
+		if exprType == DotExpression && unwindDot {
+			return DotExpression, expr, nil
+		}
+
+		resolvedExpr, err := vm.simplifyLiteral(expr.(*Literal), true)
+
+		if err != nil {
+			return UndefinedExpression, nil, errors.Join(errors.New("got error while running expression"), err)
+		}
+
+		return TypeLiteral, resolvedExpr, nil
+	case B_SET:
+		vm.Idx++
+
+		exprType, nameLiteral, err := vm.runExpr(false)
+
+		if err != nil {
+			return UndefinedExpression, nil, errors.Join(errors.New("got error while running expression"), err)
+		}
+
+		if exprType != TypeLiteral && exprType != DotExpression {
+			return UndefinedExpression, nil, errors.New("expected literal as variable name")
+		}
+
+		if exprType == DotExpression {
+			_, value, err := vm.runExpr(true)
+
+			if err != nil {
+				return UndefinedExpression, nil, errors.Join(errors.New("got error while running variable value"), err)
+			}
+
+			simpleValue, err := vm.simplifyLiteral(value.(*Literal), true)
+
+			if err != nil {
+				return UndefinedExpression, nil, errors.Join(errors.New("got error while simplyfing value"), err)
+			}
+
+			val, err := vm.Enviroment.assignDot(vm, nameLiteral.([]*Literal), simpleValue)
+
+			if err != nil {
+				return UndefinedExpression, nil, errors.Join(errors.New("got error while assigning to a variable"), err)
+			}
+
+			return TypeLiteral, val, nil
+		}
+
+		envKey, err := HashLiteral(*nameLiteral.(*Literal))
+
+		if err != nil {
+			return UndefinedExpression, nil, errors.Join(errors.New("got error while defining name hash"), err)
+		}
+
+		exprType, value, err := vm.runExpr(true)
+
+		if err != nil {
+			return UndefinedExpression, nil, errors.Join(errors.New("got error while running variable value"), err)
+		}
+
+		simpleValue, err := vm.simplifyLiteral(value.(*Literal), true)
+
+		if err != nil {
+			return UndefinedExpression, nil, errors.Join(errors.New("got error while simplyfing value"), err)
+		}
+
+		_, err = vm.Enviroment.assign(envKey, simpleValue)
+
+		if err != nil {
+			return UndefinedExpression, nil, errors.Join(errors.New("got error while assigning to a variable"), err)
+		}
+
+		return TypeLiteral, simpleValue, nil
+	case B_RETURN:
+		vm.Idx++
+
+		exprType, val, err := vm.runExpr(true)
+
+		if err != nil {
+			return UndefinedExpression, nil, errors.Join(errors.New("got error while running variable value"), err)
+		}
+
+		if exprType != TypeLiteral {
+			return UndefinedExpression, nil, errors.New("expected literal as variable name")
+		}
+
+		vm.ReturnValue = val.(*Literal)
+
+		return NoValue, nil, err
+	case B_CALL:
+		vm.Idx++
+		exprType, expr, err := vm.runExpr(true)
+
+		if err != nil {
+			return UndefinedExpression, nil, errors.Join(errors.New("got error while running expression"), err)
+		}
+
+		if exprType != TypeLiteral {
+			return UndefinedExpression, nil, fmt.Errorf("expected value got %d (call)", exprType)
+		}
+
+		resolvedExpr, err := vm.simplifyLiteral(expr.(*Literal), true)
+
+		if resolvedExpr.LiteralType != FunLiteral {
+			return UndefinedExpression, nil, fmt.Errorf("expected function value got %d", resolvedExpr.LiteralType)
+		}
+
+		newEnv := VMEnviroment{
+			Values:    make(map[string]*Literal),
+			Enclosing: vm.Enviroment,
+		}
+
+		vm.Enviroment = &newEnv
+
+		funcDeclaration := resolvedExpr.Value.(FunctionDeclaration)
+
+		values := make([]*Literal, vm.Code[vm.Idx])
+
+		vm.Idx++
+
+		for i := 0; i < len(values); i++ {
+			exprType, expr, err := vm.runExpr(true)
+
+			if err != nil {
+				return UndefinedExpression, nil, errors.Join(errors.New("got error while running expression"), err)
+			}
+
+			if exprType != TypeLiteral {
+				return UndefinedExpression, nil, fmt.Errorf("expected value got %d (resolve call arguments)", exprType)
+			}
+
+			resolvedExpr, err := vm.simplifyLiteral(expr.(*Literal), true)
+
+			values[i] = resolvedExpr
+		}
+
+		for idx, param := range funcDeclaration.Params {
+			vm.Enviroment.define(fmt.Sprintf("RT%s", string(param)), values[idx])
+		}
+
+		oldCode := vm.Code
+		oldIndex := vm.Idx
+		oldRV := vm.ReturnValue
+
+		vm.Code = funcDeclaration.Body
+		vm.Idx = 0
+		vm.ReturnValue = nil
+
+		err = vm.Run()
+
+		if err != nil {
+			return UndefinedExpression, nil, errors.Join(errors.New("got error while running function body"), err)
+		}
+
+		currentRv := vm.ReturnValue
+
+		vm.Code = oldCode
+		vm.Idx = oldIndex
+		vm.ReturnValue = oldRV
+
+		if vm.Enviroment.Enclosing == nil {
+			return ScopeChange, nil, errors.New("leaving scope but already at top level")
+		}
+
+		oldEnv := vm.Enviroment.Enclosing
+
+		vm.Enviroment = oldEnv
+
+		if currentRv != nil {
+			return TypeLiteral, currentRv, nil
+		} else {
+			return NoValue, nil, nil
+		}
 	}
 
 	return UndefinedExpression, nil, fmt.Errorf("unrecognized bytecode: %d", vm.Code[vm.Idx])
@@ -209,11 +394,13 @@ type ExpressionType = int
 
 const (
 	UndefinedExpression ExpressionType = iota
+	NoValue
 	TypeLiteral
 	ScopeChange
+	DotExpression
 )
 
-func (vm *VM) simplifyLiteral(literal Literal, resolveRef bool) (Literal, error) {
+func (vm *VM) simplifyLiteral(literal *Literal, resolveRef bool) (*Literal, error) {
 	if literal.LiteralType == RefLiteral && resolveRef {
 
 		if literal.Value.(ReferenceDeclaration).Dynamic {
@@ -223,14 +410,14 @@ func (vm *VM) simplifyLiteral(literal Literal, resolveRef bool) (Literal, error)
 		rVal, rErr := vm.Enviroment.resolve(fmt.Sprintf("RT%s", literal.Value.(ReferenceDeclaration).Reference))
 
 		if rErr != nil {
-			return Literal{}, errors.Join(errors.New("error resolivng reference"), rErr)
+			return nil, errors.Join(errors.New("error resolivng reference"), rErr)
 		}
 
 		return rVal, nil
 	}
 
 	if literal.LiteralType == ObjLiteral {
-		objectData := PartsObject{Entries: make(map[string]Literal)}
+		objectData := PartsObject{Entries: make(map[string]*Literal)}
 
 		for i, entry := range literal.Value.(ObjDefinition).Entries {
 			//TODO fix this
@@ -241,31 +428,31 @@ func (vm *VM) simplifyLiteral(literal Literal, resolveRef bool) (Literal, error)
 			vm.Code = entry
 			vm.Idx = 0
 
-			_, keyValue, err := vm.runExpr()
+			_, keyValue, err := vm.runExpr(true)
 
 			if err != nil {
-				return Literal{}, errors.Join(fmt.Errorf("error resolivng length object key idx: %d", i), err)
+				return nil, errors.Join(fmt.Errorf("error resolivng length object key idx: %d", i), err)
 			}
 
-			simplifiedKeyValue, err := vm.simplifyLiteral(keyValue.(Literal), false)
+			simplifiedKeyValue, err := vm.simplifyLiteral(keyValue.(*Literal), false)
 
 			if err != nil {
-				return Literal{}, errors.Join(fmt.Errorf("error resolivng simplyfing object key idx: %d", i), err)
+				return nil, errors.Join(fmt.Errorf("error resolivng simplyfing object key idx: %d", i), err)
 			}
 
-			entryKey, err := HashLiteral(simplifiedKeyValue)
+			entryKey, err := HashLiteral(*simplifiedKeyValue)
 
 			if err != nil {
-				return Literal{}, errors.Join(fmt.Errorf("error resolivng hashing object key idx: %d", i), err)
+				return nil, errors.Join(fmt.Errorf("error resolivng hashing object key idx: %d", i), err)
 			}
 
-			_, actualValue, err := vm.runExpr()
+			_, actualValue, err := vm.runExpr(true)
 
 			if err != nil {
-				return Literal{}, errors.Join(fmt.Errorf("error resolivng object value idx: %d", i), err)
+				return nil, errors.Join(fmt.Errorf("error resolivng object value idx: %d", i), err)
 			}
 
-			simplifiedValue, err := vm.simplifyLiteral(actualValue.(Literal), true)
+			simplifiedValue, err := vm.simplifyLiteral(actualValue.(*Literal), true)
 
 			objectData.Entries[entryKey] = simplifiedValue
 
@@ -273,11 +460,11 @@ func (vm *VM) simplifyLiteral(literal Literal, resolveRef bool) (Literal, error)
 			vm.Idx = oldIndex
 		}
 
-		return Literal{LiteralType: ParsedObjLiteral, Value: objectData}, nil
+		return &Literal{LiteralType: ParsedObjLiteral, Value: objectData}, nil
 	}
 
 	if literal.LiteralType == ListLiteral {
-		objectData := PartsObject{Entries: make(map[string]Literal)}
+		objectData := PartsObject{Entries: make(map[string]*Literal)}
 
 		for i, entry := range literal.Value.(ListDefinition).Entries {
 
@@ -287,7 +474,7 @@ func (vm *VM) simplifyLiteral(literal Literal, resolveRef bool) (Literal, error)
 			})
 
 			if err != nil {
-				return Literal{}, errors.Join(fmt.Errorf("error encoding index, idx: %d", i), err)
+				return nil, errors.Join(fmt.Errorf("error encoding index, idx: %d", i), err)
 			}
 
 			//TODO fix this
@@ -298,41 +485,41 @@ func (vm *VM) simplifyLiteral(literal Literal, resolveRef bool) (Literal, error)
 			vm.Code = entry
 			vm.Idx = 0
 
-			_, resolvedValue, err := vm.runExpr()
+			_, resolvedValue, err := vm.runExpr(true)
 
 			vm.Code = oldCode
 			vm.Idx = oldIndex
 
 			if err != nil {
-				return Literal{}, errors.Join(errors.New("got error while parsing array element"), err)
+				return nil, errors.Join(errors.New("got error while parsing array element"), err)
 			}
 
-			simplifiedValue, err := vm.simplifyLiteral(resolvedValue.(Literal), true)
+			simplifiedValue, err := vm.simplifyLiteral(resolvedValue.(*Literal), true)
 
 			objectData.Entries[entryKey] = simplifiedValue
 		}
 
-		return Literal{LiteralType: ParsedListLiteral, Value: objectData}, nil
+		return &Literal{LiteralType: ParsedListLiteral, Value: objectData}, nil
 	}
 
 	return literal, nil
 }
 
 type PartsObject struct {
-	Entries map[string]Literal
+	Entries map[string]*Literal
 }
 
 type VMEnviroment struct {
 	Enclosing *VMEnviroment
 
-	Values map[string]Literal
+	Values map[string]*Literal
 }
 
-func (env *VMEnviroment) define(key string, value Literal) (Literal, error) {
+func (env *VMEnviroment) define(key string, value *Literal) (*Literal, error) {
 	_, exists := env.Values[key]
 
 	if exists {
-		return Literal{}, errors.New("redefining variable in the same scope")
+		return nil, errors.New("redefining variable in the same scope")
 	}
 
 	env.Values[key] = value
@@ -340,18 +527,76 @@ func (env *VMEnviroment) define(key string, value Literal) (Literal, error) {
 	return value, nil
 }
 
-func (env *VMEnviroment) resolve(key string) (Literal, error) {
-	_, exists := env.Values[key]
-
-	if exists {
-		return env.Values[key], nil
+func (env *VMEnviroment) resolve(key string) (*Literal, error) {
+	if value, exists := env.Values[key]; exists {
+		return value, nil
 	}
 
 	if env.Enclosing != nil {
 		return env.Enclosing.resolve(key)
 	}
 
-	return Literal{}, errors.New("undefined variable resolve")
+	return nil, errors.New("undefined variable resolve")
+}
+
+func (env *VMEnviroment) assign(key string, value *Literal) (*Literal, error) {
+	//TODO check for assigning to upper
+	_, exists := env.Values[key]
+
+	if !exists {
+		return nil, errors.New("setting to a variable that doesn't exist single")
+	}
+
+	env.Values[key] = value
+
+	return value, nil
+}
+
+func (env *VMEnviroment) assignDot(vm *VM, key []*Literal, value *Literal) (*Literal, error) {
+	//TODO check for assigning to upper
+	hash, err := HashLiteral(*key[0])
+
+	if err != nil {
+		return nil, errors.Join(errors.New("got errror while unwinding set expr"), err)
+	}
+
+	accessor, exists := env.Values[hash]
+
+	if !exists {
+		return nil, errors.New("setting to a variable that doesn't exist chained")
+	}
+
+	for i := 1; i < len(key); i++ {
+		switch accessor.LiteralType {
+		case ListLiteral, ObjLiteral, ParsedListLiteral, ParsedObjLiteral:
+		default:
+			return nil, fmt.Errorf("unexpected value type at %d", i)
+		}
+
+		if accessor.LiteralType == ListLiteral || accessor.LiteralType == ObjLiteral {
+			accessor, err = vm.simplifyLiteral(accessor, true)
+
+			if err != nil {
+				return nil, errors.Join(errors.New("got error while running expression"), err)
+			}
+		}
+
+		localKey := key[i]
+
+		keyHash, err := HashLiteral(*localKey)
+
+		if err != nil {
+			return nil, errors.Join(errors.New("got error while hashing key"), err)
+		}
+
+		if _, has := accessor.Value.(PartsObject).Entries[keyHash]; has {
+			accessor.Value.(PartsObject).Entries[keyHash] = value
+		} else {
+			return nil, fmt.Errorf("key not found: %s", keyHash)
+		}
+	}
+
+	return value, nil
 }
 
 func (vm *VM) decodeLen() (int, error) {

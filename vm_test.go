@@ -221,7 +221,7 @@ func TestHelperJoined(t *testing.T) {
 	}
 }
 
-func TestDot(t *testing.T) {
+func TestDotObj(t *testing.T) {
 	type TestStruct struct {
 		Val int
 	}
@@ -230,7 +230,7 @@ func TestDot(t *testing.T) {
 		let obj = |> key: 123 <|
 		let Val = obj.key `)
 
-		if err != nil {
+	if err != nil {
 		t.Error(err)
 		return
 	}
@@ -251,4 +251,292 @@ func TestDot(t *testing.T) {
 		return
 	}
 
+}
+
+func TestDotList(t *testing.T) {
+	type TestStruct struct {
+		Val int
+	}
+
+	vm, err := GetVMWithSource(`
+		let obj = [10, 20]
+		let Val = obj.0
+	`)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	err = vm.Run()
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var testStruct TestStruct
+
+	ReadFromParts(vm, &testStruct)
+
+	if testStruct.Val != 10 {
+		t.Errorf("field value didn't matched got (%d) expected (%d)", testStruct.Val, 10)
+		return
+	}
+}
+
+func TestDotListRef(t *testing.T) {
+	type TestStruct struct {
+		Val int
+	}
+
+	vm, err := GetVMWithSource(`let idx = 0
+		let obj = [10]
+		let Val = obj[idx]`)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	err = vm.Run()
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var testStruct TestStruct
+
+	ReadFromParts(vm, &testStruct)
+
+	if testStruct.Val != 10 {
+		t.Errorf("field value didn't matched got (%d) expected (%d)", testStruct.Val, 10)
+		return
+	}
+}
+
+func TestDotListAccess(t *testing.T) {
+	type TestStruct struct {
+		Val int
+	}
+
+	vm, err := GetVMWithSource(`let obj = [10, 20]
+		let Val = obj[0]`)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	err = vm.Run()
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var testStruct TestStruct
+
+	ReadFromParts(vm, &testStruct)
+
+	if testStruct.Val != 10 {
+		t.Errorf("field value didn't matched got (%d) expected (%d)", testStruct.Val, 10)
+		return
+	}
+}
+
+func TestVarAssign(t *testing.T) {
+	type TestStruct struct {
+		Val int `parts:"num"`
+	}
+
+	vm, err := GetVMWithSource(`let num = 10
+		num = 15`)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	err = vm.Run()
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var testStruct TestStruct
+
+	ReadFromParts(vm, &testStruct)
+
+	if testStruct.Val != 15 {
+		t.Errorf("field value didn't matched got (%d) expected (%d)", testStruct.Val, 15)
+		return
+	}
+}
+
+func TestArrayResolveAssign(t *testing.T) {
+	type TestStruct struct {
+		Val []int `parts:"arr"`
+	}
+
+	vm, err := GetVMWithSource(`let arr = [10, 20]
+		arr[0] = 15`)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	err = vm.Run()
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var testStruct TestStruct
+
+	ReadFromParts(vm, &testStruct)
+
+	if testStruct.Val[0] != 15 {
+		t.Errorf("field value didn't matched got (%d) expected (%d)", testStruct.Val[0], 15)
+		return
+	}
+
+	if testStruct.Val[1] != 20 {
+		t.Errorf("field value didn't matched got (%d) expected (%d)", testStruct.Val[1], 20)
+		return
+	}
+}
+
+func TestArrayAssign(t *testing.T) {
+	type TestStruct struct {
+		Val []int `parts:"arr"`
+	}
+
+	vm, err := GetVMWithSource(`let arr = [10, 20]
+		arr.0 = 15`)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	err = vm.Run()
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var testStruct TestStruct
+
+	ReadFromParts(vm, &testStruct)
+
+	if testStruct.Val[0] != 15 {
+		t.Errorf("field value didn't matched got (%d) expected (%d)", testStruct.Val[0], 15)
+		return
+	}
+
+	if testStruct.Val[1] != 20 {
+		t.Errorf("field value didn't matched got (%d) expected (%d)", testStruct.Val[1], 20)
+		return
+	}
+}
+
+func TestObjAssign(t *testing.T) {
+	type TestStruct struct {
+		Val struct {
+			Field int `parts:"field"`
+		} `parts:"obj"`
+	}
+
+	vm, err := GetVMWithSource(`let obj = |> field: 10 <|
+		obj.field = 15`)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	err = vm.Run()
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var testStruct TestStruct
+
+	ReadFromParts(vm, &testStruct)
+
+	if testStruct.Val.Field != 15 {
+		t.Errorf("field value didn't matched got (%d) expected (%d)", testStruct.Val.Field, 15)
+		return
+	}
+}
+
+func TestObjResolveAssign(t *testing.T) {
+	type TestStruct struct {
+		Res int `parts:"res"`
+	}
+
+	vm, err := GetVMWithSource(`let key = "field" 
+		let obj = |> "field": 10 <|
+		obj[key] = 15
+		let res = obj[key]`)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	err = vm.Run()
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var testStruct TestStruct
+
+	ReadFromParts(vm, &testStruct)
+
+	if testStruct.Res != 15 {
+		t.Errorf("field value didn't matched got (%d) expected (%d)", testStruct.Res, 15)
+		return
+	}
+}
+
+func TestFunctionCall(t *testing.T) {
+	type TestStruct struct {
+		Res int `parts:"res"`
+	}
+
+	vm, err := GetVMWithSource(`fun GetRes(obj) = obj.res
+		let math = |> res: 10 <|
+		let res = GetRes(math)`)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	err = vm.Run()
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var testStruct TestStruct
+
+	ReadFromParts(vm, &testStruct)
+
+	if testStruct.Res != 10 {
+		t.Errorf("field value didn't matched got (%d) expected (%d)", testStruct.Res, 10)
+		return
+	}
 }

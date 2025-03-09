@@ -39,16 +39,65 @@ func GetVMWithSource(source string) (*VM, error) {
 		return &VM{}, errors.Join(errors.New("got error from within parser"), err)
 	}
 
+	literals := make([]*Literal, len(parser.Literals))
+
+	for idx, literal := range parser.Literals {
+		literals[idx] = &literal 
+	}
+
 	return &VM{
 		Enviroment: &VMEnviroment{
 			Enclosing: nil,
-			Values:    make(map[string]Literal),
+			Values:    make(map[string]*Literal),
 		},
 		Idx:      0,
 		Code:     code,
-		Literals: parser.Literals,
+		Literals: literals,
 		Meta:     parser.Meta,
 	}, nil
+}
+
+func RunString(codeString string) (VM, error) {
+	scanner := GetScannerWithSource(codeString)
+
+	parser := Parser{
+		Scanner:   &scanner,
+		Scope:     TopLevel,
+		Literals:  InitialLiterals,
+		LastToken: Token{Type: TokenInvalid},
+		Meta:      make(map[string]string),
+	}
+
+	code, err := parser.parseAll()
+
+	if err != nil {
+		return VM{}, errors.Join(errors.New("got error from within parser"), err)
+	}
+
+	literals := make([]*Literal, len(parser.Literals))
+
+	for _, literal := range parser.Literals {
+		literals = append(literals, &literal)
+	}
+
+	vm := VM{
+		Enviroment: &VMEnviroment{
+			Enclosing: nil,
+			Values:    make(map[string]*Literal),
+		},
+		Idx:      0,
+		Code:     code,
+		Literals: literals,
+		Meta:     parser.Meta,
+	}
+
+	err = vm.Run()
+
+	if err != nil {
+		return VM{}, err
+	}
+
+	return vm, nil
 }
 
 func ReadFromParts[T any](vm *VM, out *T) {
@@ -111,8 +160,6 @@ func FillField[T any](fieldIdx int, vm *VM, out *T) {
 func FillStruct[T any](data map[string]any, vm *VM, out T) {
 	outStruct := reflect.ValueOf(out).Elem()
 	outType := outStruct.Type()
-
-	println(outType.Kind())
 
 	for i := 0; i < outType.NumField(); i++ {
 		field := outType.Field(i)

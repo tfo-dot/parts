@@ -230,6 +230,57 @@ func TestNamedFunctionWithTwoArg(t *testing.T) {
 	}
 }
 
+func TestNamedFunctionInline(t *testing.T) {
+	parser := GetParserWithSource("fun x(one) = one")
+
+	bytecode, err := parser.parse()
+
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+
+	oneIdx, _ := GetParserLiteral(parser, RefLiteral, "one")
+
+	if oneIdx == -1 {
+		t.Error("literal (Ref, 'one') wasn't present")
+	}
+
+	idx, _ := GetParserLiteral(parser, RefLiteral, "x")
+
+	if idx == -1 {
+		t.Error("literal (Ref, 'x') wasn't present")
+	}
+
+	funcIdx, _ := GetParserLiteral(parser, FunLiteral, nil)
+
+	if funcIdx == -1 {
+		t.Error("literal (Fun) wasn't present")
+	}
+
+	checkResult := CheckBytecode(t, bytecode, []Bytecode{B_DECLARE, B_LITERAL, Bytecode(idx), B_LITERAL, Bytecode(funcIdx)})
+
+	if !checkResult {
+		return
+	} else {
+		t.Log("Got through first check")
+	}
+
+	fnDeclaration := (parser.Literals[len(parser.Literals)-1].Value).(FunctionDeclaration)
+
+	if len(fnDeclaration.Params) != 1 {
+		t.Errorf("expected 2 params got %d", len(fnDeclaration.Params))
+		return
+	}
+
+	if string(fnDeclaration.Params[0]) != "one" {
+		t.Errorf("expected 'one' at [0] in declaration got %s", string(fnDeclaration.Params[0]))
+		return
+	}
+
+	CheckBytecode(t, fnDeclaration.Body, []Bytecode{B_RETURN, B_LITERAL, Bytecode(oneIdx)})
+}
+
 func TestObjectDeclaration(t *testing.T) {
 	parser := GetParserWithSource("let x = |> <|")
 
@@ -457,6 +508,428 @@ func TestDotNestedExpression(t *testing.T) {
 	CheckBytecode(t, bytecode, append(append(append(append(append([]Bytecode{B_DOT, B_DOT, B_LITERAL}, mustEncodeLen(idxObj)...), B_LITERAL), mustEncodeLen(idxVal)...), B_LITERAL), mustEncodeLen(idxKey)...))
 }
 
+func TestRefListAccess(t *testing.T) {
+	parser := GetParserWithSource("x[0]")
+
+	bytecode, err := parser.parse()
+
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+
+	varKey, _ := GetParserLiteral(parser, RefLiteral, "x")
+
+	if varKey == -1 {
+		t.Error("literal (Ref, 'x') wasn't present")
+		return
+	}
+
+	idxKey, _ := GetParserLiteral(parser, IntLiteral, 0)
+
+	if idxKey == -1 {
+		t.Error("literal (Int, 0) wasn't present")
+		return
+	}
+
+	CheckBytecode(t, bytecode, append([]Bytecode{B_DOT, B_LITERAL}, Bytecode(varKey), B_RESOLVE, B_LITERAL, Bytecode(idxKey)))
+}
+
+func TestFunCalSingleArg(t *testing.T) {
+	parser := GetParserWithSource("x(10)")
+
+	bytecode, err := parser.parse()
+
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+
+	varKey, _ := GetParserLiteral(parser, RefLiteral, "x")
+
+	if varKey == -1 {
+		t.Error("literal (Ref, 'x') wasn't present")
+		return
+	}
+
+	idxKey, _ := GetParserLiteral(parser, IntLiteral, 10)
+
+	if idxKey == -1 {
+		t.Error("literal (Int, 10) wasn't present")
+		return
+	}
+
+	CheckBytecode(t, bytecode, append([]Bytecode{B_CALL, B_LITERAL}, Bytecode(varKey), Bytecode(1), B_LITERAL, Bytecode(idxKey)))
+}
+
+func TestFunCallAssign(t *testing.T) {
+	parser := GetParserWithSource("let y = x(10)")
+
+	bytecode, err := parser.parse()
+
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+
+	varKey, _ := GetParserLiteral(parser, RefLiteral, "x")
+
+	if varKey == -1 {
+		t.Error("literal (Ref, 'x') wasn't present")
+		return
+	}
+
+	varKey2, _ := GetParserLiteral(parser, RefLiteral, "y")
+
+	if varKey2 == -1 {
+		t.Error("literal (Ref, 'y') wasn't present")
+		return
+	}
+
+	idxKey, _ := GetParserLiteral(parser, IntLiteral, 10)
+
+	if idxKey == -1 {
+		t.Error("literal (Int, 10) wasn't present")
+		return
+	}
+
+	CheckBytecode(t, bytecode, []Bytecode{B_DECLARE, B_LITERAL, Bytecode(varKey2), B_CALL, B_LITERAL, Bytecode(varKey), 1, B_LITERAL, Bytecode(idxKey)})
+}
+
+func TestFunCalMultipleArgs(t *testing.T) {
+	parser := GetParserWithSource("x(10, 20)")
+
+	bytecode, err := parser.parse()
+
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+
+	varKey, _ := GetParserLiteral(parser, RefLiteral, "x")
+
+	if varKey == -1 {
+		t.Error("literal (Ref, 'x') wasn't present")
+		return
+	}
+
+	idxKey, _ := GetParserLiteral(parser, IntLiteral, 10)
+
+	if idxKey == -1 {
+		t.Error("literal (Int, 10) wasn't present")
+		return
+	}
+
+	idxKey2, _ := GetParserLiteral(parser, IntLiteral, 20)
+
+	if idxKey == -1 {
+		t.Error("literal (Int, 20) wasn't present")
+		return
+	}
+
+	CheckBytecode(t, bytecode, append([]Bytecode{B_CALL, B_LITERAL}, Bytecode(varKey), Bytecode(2), B_LITERAL, Bytecode(idxKey), B_LITERAL, Bytecode(idxKey2)))
+}
+
+func TestFunFieldCal(t *testing.T) {
+	parser := GetParserWithSource("x.y(10)")
+
+	bytecode, err := parser.parse()
+
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+
+	varKey, _ := GetParserLiteral(parser, RefLiteral, "x")
+
+	if varKey == -1 {
+		t.Error("literal (Ref, 'x') wasn't present")
+		return
+	}
+
+	varKey2, _ := GetParserLiteral(parser, RefLiteral, "y")
+
+	if varKey2 == -1 {
+		t.Error("literal (Ref, 'y') wasn't present")
+		return
+	}
+
+	varVal, _ := GetParserLiteral(parser, IntLiteral, 10)
+
+	if varVal == -1 {
+		t.Error("literal (Int, 10) wasn't present")
+		return
+	}
+
+	CheckBytecode(t, bytecode, []Bytecode{B_CALL, B_DOT, B_LITERAL, Bytecode(varKey), B_LITERAL, Bytecode(varKey2), Bytecode(1), B_LITERAL, Bytecode(varVal)})
+}
+
+func TestFunFieldArrCal(t *testing.T) {
+	parser := GetParserWithSource("x[y](10)")
+
+	bytecode, err := parser.parse()
+
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+
+	varKey, _ := GetParserLiteral(parser, RefLiteral, "x")
+
+	if varKey == -1 {
+		t.Error("literal (Ref, 'x') wasn't present")
+		return
+	}
+
+	varKey2, _ := GetParserLiteral(parser, RefLiteral, "y")
+
+	if varKey2 == -1 {
+		t.Error("literal (Ref, 'y') wasn't present")
+		return
+	}
+
+	varVal, _ := GetParserLiteral(parser, IntLiteral, 10)
+
+	if varVal == -1 {
+		t.Error("literal (Int, 10) wasn't present")
+		return
+	}
+
+	CheckBytecode(t, bytecode, []Bytecode{B_CALL, B_DOT, B_LITERAL, Bytecode(varKey), B_RESOLVE, B_LITERAL, Bytecode(varKey2), Bytecode(1), B_LITERAL, Bytecode(varVal)})
+}
+
+func TestSetVarExpression(t *testing.T) {
+	parser := GetParserWithSource("x = 0")
+
+	bytecode, err := parser.parseAll()
+
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+
+	varKey, _ := GetParserLiteral(parser, RefLiteral, "x")
+
+	if varKey == -1 {
+		t.Error("literal (Ref, 'x') wasn't present")
+		return
+	}
+
+	varVal, _ := GetParserLiteral(parser, IntLiteral, 0)
+
+	if varVal == -1 {
+		t.Error("literal (Int, 0) wasn't present")
+		return
+	}
+
+	CheckBytecode(t, bytecode, []Bytecode{B_SET, B_LITERAL, Bytecode(varKey), B_LITERAL, Bytecode(varVal)})
+}
+
+func TestSetObjExpression(t *testing.T) {
+	parser := GetParserWithSource("obj.key = 10")
+
+	bytecode, err := parser.parse()
+
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+
+	varKey, _ := GetParserLiteral(parser, RefLiteral, "obj")
+
+	if varKey == -1 {
+		t.Error("literal (Ref, 'obj') wasn't present")
+		return
+	}
+
+	varKey2, _ := GetParserLiteral(parser, RefLiteral, "key")
+
+	if varKey2 == -1 {
+		t.Error("literal (Ref, 'key') wasn't present")
+		return
+	}
+
+	varVal, _ := GetParserLiteral(parser, IntLiteral, 10)
+
+	if varVal == -1 {
+		t.Error("literal (Int, 10) wasn't present")
+		return
+	}
+
+	CheckBytecode(t, bytecode, []Bytecode{B_SET, B_DOT, B_LITERAL, Bytecode(varKey), B_LITERAL, Bytecode(varKey2), B_LITERAL, Bytecode(varVal)})
+}
+
+func TestSetObjIndexExpression(t *testing.T) {
+	parser := GetParserWithSource("obj[key] = 10")
+
+	bytecode, err := parser.parse()
+
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+
+	varKey, _ := GetParserLiteral(parser, RefLiteral, "obj")
+
+	if varKey == -1 {
+		t.Error("literal (Ref, 'obj') wasn't present")
+		return
+	}
+
+	varKey2, _ := GetParserLiteral(parser, RefLiteral, "key")
+
+	if varKey2 == -1 {
+		t.Error("literal (Ref, 'key') wasn't present")
+		return
+	}
+
+	varVal, _ := GetParserLiteral(parser, IntLiteral, 10)
+
+	if varVal == -1 {
+		t.Error("literal (Int, 10) wasn't present")
+		return
+	}
+
+	CheckBytecode(t, bytecode, []Bytecode{B_SET, B_DOT, B_LITERAL, Bytecode(varKey), B_RESOLVE, B_LITERAL, Bytecode(varKey2), B_LITERAL, Bytecode(varVal)})
+}
+
+func TestSetListExpression(t *testing.T) {
+	parser := GetParserWithSource("list[0] = 10")
+
+	bytecode, err := parser.parse()
+
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+
+	varKey, _ := GetParserLiteral(parser, RefLiteral, "list")
+
+	if varKey == -1 {
+		t.Error("literal (Ref, 'x') wasn't present")
+		return
+	}
+
+	varVal, _ := GetParserLiteral(parser, IntLiteral, 0)
+
+	if varVal == -1 {
+		t.Error("literal (Int, 0) wasn't present")
+		return
+	}
+
+	varVal2, _ := GetParserLiteral(parser, IntLiteral, 10)
+
+	if varVal2 == -1 {
+		t.Error("literal (Int, 10) wasn't present")
+		return
+	}
+
+	CheckBytecode(t, bytecode, []Bytecode{B_SET, B_DOT, B_LITERAL, Bytecode(varKey), B_RESOLVE, B_LITERAL, Bytecode(varVal), B_LITERAL, Bytecode(varVal2)})
+}
+
+func TestSetDotListExpression(t *testing.T) {
+	parser := GetParserWithSource("list.0 = 10")
+
+	bytecode, err := parser.parse()
+
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+
+	varKey, _ := GetParserLiteral(parser, RefLiteral, "list")
+
+	if varKey == -1 {
+		t.Error("literal (Ref, 'x') wasn't present")
+		return
+	}
+
+	varVal, _ := GetParserLiteral(parser, IntLiteral, 0)
+
+	if varVal == -1 {
+		t.Error("literal (Int, 0) wasn't present")
+		return
+	}
+
+	varVal2, _ := GetParserLiteral(parser, IntLiteral, 10)
+
+	if varVal2 == -1 {
+		t.Error("literal (Int, 10) wasn't present")
+		return
+	}
+
+	CheckBytecode(t, bytecode, []Bytecode{B_SET, B_DOT, B_LITERAL, Bytecode(varKey), B_LITERAL, Bytecode(varVal), B_LITERAL, Bytecode(varVal2)})
+}
+
+func TestSetListDynamicExpression(t *testing.T) {
+	parser := GetParserWithSource("list[idx] = 10")
+
+	bytecode, err := parser.parse()
+
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+
+	varKey, _ := GetParserLiteral(parser, RefLiteral, "list")
+
+	if varKey == -1 {
+		t.Error("literal (Ref, 'list') wasn't present")
+		return
+	}
+
+	varKey2, _ := GetParserLiteral(parser, RefLiteral, "idx")
+
+	if varKey2 == -1 {
+		t.Error("literal (Ref, 'idx') wasn't present")
+		return
+	}
+
+	varVal, _ := GetParserLiteral(parser, IntLiteral, 10)
+
+	if varVal == -1 {
+		t.Error("literal (Int, 10) wasn't present")
+		return
+	}
+
+	CheckBytecode(t, bytecode, []Bytecode{B_SET, B_DOT, B_LITERAL, Bytecode(varKey), B_RESOLVE, B_LITERAL, Bytecode(varKey2), B_LITERAL, Bytecode(varVal)})
+}
+
+func TestSetListDotFieldExpression(t *testing.T) {
+	parser := GetParserWithSource("list.idx = 10")
+
+
+	bytecode, err := parser.parse()
+
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+
+	varKey, _ := GetParserLiteral(parser, RefLiteral, "list")
+
+	if varKey == -1 {
+		t.Error("literal (Ref, 'list') wasn't present")
+		return
+	}
+
+	varKey2, _ := GetParserLiteral(parser, RefLiteral, "idx")
+
+	if varKey2 == -1 {
+		t.Error("literal (Ref, 'idx') wasn't present")
+		return
+	}
+
+	varVal, _ := GetParserLiteral(parser, IntLiteral, 10)
+
+	if varVal == -1 {
+		t.Error("literal (Int, 10) wasn't present")
+		return
+	}
+
+	CheckBytecode(t, bytecode, []Bytecode{B_SET, B_DOT, B_LITERAL, Bytecode(varKey), B_LITERAL, Bytecode(varKey2), B_LITERAL, Bytecode(varVal)})
+}
+
 func CheckBytecode(t *testing.T, result []Bytecode, expected []Bytecode) bool {
 	fmt.Printf("Checking chunks: %v ?? %v\n", result, expected)
 
@@ -477,11 +950,15 @@ func GetParserLiteral(p Parser, literalType LiteralType, val any) (int, Literal)
 			continue
 		}
 
+		if val == nil {
+			return idx, literal
+		}
+
 		if literalType == RefLiteral && literal.Value.(ReferenceDeclaration).Reference == val {
 			return idx, literal
 		}
 
-		if literal.Value != val && val != nil {
+		if literal.Value != val {
 			continue
 		}
 
