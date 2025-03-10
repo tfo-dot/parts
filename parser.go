@@ -235,6 +235,45 @@ func (p *Parser) parseExpression() ([]Bytecode, error) {
 		}
 	}
 
+	if p.matchKeyword("IF") {
+		condition, err := p.parseInScope(Expression)
+
+		if err != nil {
+			return []Bytecode{}, errors.Join(errors.New("got error while parsing expression (resolving condition)"), err)
+		}
+
+		thenBranch, err := p.parseInScope(Expression)
+
+		if err != nil {
+			return []Bytecode{}, errors.Join(errors.New("got error while parsing expression (resolving then branch)"), err)
+		}
+
+		thenLength, err := encodeLen(len(thenBranch))
+
+		if err != nil {
+			return []Bytecode{}, errors.Join(errors.New("got error while encoding length expression (encoding then branch)"), err)
+		}
+
+		elseBranch := []Bytecode{}
+		elseLength := []Bytecode{0}
+
+		if p.matchKeyword("ELSE") {
+			elseBranch, err = p.parseInScope(Expression)
+
+			if err != nil {
+				return []Bytecode{}, errors.Join(errors.New("got error while parsing expression (resolving else branch)"), err)
+			}
+
+			elseLength, err = encodeLen(len(elseBranch))
+
+			if err != nil {
+				return []Bytecode{}, errors.Join(errors.New("got error while encoding length expression (encoding else branch)"), err)
+			}
+		}
+
+		return append(append(append(append(append([]Bytecode{B_COND_JUMP}, condition...), thenLength...), thenBranch...), elseLength...), elseBranch...), nil
+	}
+
 	if p.matchOperator("LEFT_BRACE") {
 		rVal, rErr := p.parseBlock(false)
 
@@ -243,6 +282,16 @@ func (p *Parser) parseExpression() ([]Bytecode, error) {
 		}
 
 		return rVal, nil
+	}
+
+	if p.matchKeyword("RETURN") {
+		expr, err := p.parseExpression()
+
+		if err != nil {
+			return []Bytecode{}, errors.Join(errors.New("got error while parsing return value"), err)
+		}
+
+		return append([]Bytecode{B_RETURN}, expr...), nil
 	}
 
 	rVal, rErr := p.parsePrimary()
@@ -379,11 +428,11 @@ func (p *Parser) parseBlock(checkBrace bool) ([]Bytecode, error) {
 
 func (p *Parser) parsePrimary() ([]Bytecode, error) {
 	if p.matchKeyword("FALSE") {
-		return []Bytecode{0}, nil
+		return []Bytecode{B_LITERAL, 0}, nil
 	}
 
 	if p.matchKeyword("TRUE") {
-		return []Bytecode{1}, nil
+		return []Bytecode{B_LITERAL, 1}, nil
 	}
 
 	currentToken, err := p.peek()
@@ -602,6 +651,8 @@ const (
 	B_DOT
 	B_CALL
 	B_RESOLVE
+	B_COND_JUMP
+	B_JUMP
 )
 
 type ReferenceDeclaration struct {

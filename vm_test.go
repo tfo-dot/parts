@@ -1,6 +1,9 @@
 package parts
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 func TestHelperNoTags(t *testing.T) {
 	type TestStruct struct {
@@ -537,6 +540,97 @@ func TestFunctionCall(t *testing.T) {
 
 	if testStruct.Res != 10 {
 		t.Errorf("field value didn't matched got (%d) expected (%d)", testStruct.Res, 10)
+		return
+	}
+}
+
+func TestIfFull(t *testing.T) {
+	type TestStruct struct {
+		Res int `parts:"res"`
+	}
+
+	vm, err := GetVMWithSource(`let res = if (true) {return 10} else {return 1}`)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	err = vm.Run()
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var testStruct TestStruct
+
+	ReadFromParts(vm, &testStruct)
+
+	if testStruct.Res != 10 {
+		t.Errorf("field value didn't matched got (%d) expected (%d)", testStruct.Res, 10)
+		return
+	}
+}
+
+func TestIfFullCursed(t *testing.T) {
+	type TestStruct struct {
+		Res int `parts:"res"`
+	}
+
+	vm, err := GetVMWithSource(`let res = if true return 10 else return 1`)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	err = vm.Run()
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var testStruct TestStruct
+
+	ReadFromParts(vm, &testStruct)
+
+	if testStruct.Res != 10 {
+		t.Errorf("field value didn't matched got (%d) expected (%d)", testStruct.Res, 10)
+		return
+	}
+}
+
+func TestIfNoElse(t *testing.T) {
+	type TestStruct struct {
+		Res int `parts:"res"`
+	}
+
+	vm, err := GetVMWithSource(`let res = if (false) {return 10}`)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	err = vm.Run()
+
+	if err == nil {
+		t.Error(errors.New("expeced error but got none"))
+		return
+	}
+
+	if errs, ok := err.(interface{ Unwrap() []error }); ok {
+		unwraped := errs.Unwrap()
+
+		if unwraped[len(unwraped)-1].Error() != "got no value, expected value at 'res'" {
+			t.Error(errors.New("expected diffrent kind of errror"))
+			return
+		}
+	} else {
+		println(err)
+		t.Error(errors.New("expected diffrent kind of errror"))
 		return
 	}
 }

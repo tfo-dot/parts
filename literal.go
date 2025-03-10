@@ -30,6 +30,27 @@ var InitialLiterals = []Literal{
 	{BoolLiteral, true},
 }
 
+func HashLiteral(literal Literal) (string, error) {
+	switch literal.LiteralType {
+	case IntLiteral:
+		return fmt.Sprintf("IT%d", literal.Value.(int)), nil
+	case DoubleLiteral:
+		return fmt.Sprintf("DT%f", literal.Value.(float64)), nil
+	case BoolLiteral:
+		if literal.Value.(bool) {
+			return "BT1", nil
+		} else {
+			return "BT0", nil
+		}
+	case StringLiteral:
+		return fmt.Sprintf("ST%s", literal.Value.(string)), nil
+	case RefLiteral:
+		return fmt.Sprintf("RT%s", literal.Value.(ReferenceDeclaration).Reference), nil
+	}
+
+	return "", errors.New("literal not hashable")
+}
+
 func (l *Literal) ToGoTypes(vm *VM) (any, error) {
 	switch l.LiteralType {
 	case IntLiteral:

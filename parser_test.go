@@ -16,7 +16,7 @@ func TestLetFalse(t *testing.T) {
 	}
 
 	CheckBytecode(t, bytecode, []Bytecode{
-		B_DECLARE, B_LITERAL, Bytecode(len(InitialLiterals)), 0,
+		B_DECLARE, B_LITERAL, Bytecode(len(InitialLiterals)), B_LITERAL, 0,
 	})
 }
 
@@ -31,7 +31,7 @@ func TestLetTrue(t *testing.T) {
 	}
 
 	CheckBytecode(t, bytecode, []Bytecode{
-		B_DECLARE, B_LITERAL, Bytecode(len(InitialLiterals)), 1,
+		B_DECLARE, B_LITERAL, Bytecode(len(InitialLiterals)), B_LITERAL, 1,
 	})
 }
 
@@ -898,7 +898,6 @@ func TestSetListDynamicExpression(t *testing.T) {
 func TestSetListDotFieldExpression(t *testing.T) {
 	parser := GetParserWithSource("list.idx = 10")
 
-
 	bytecode, err := parser.parse()
 
 	if err != nil {
@@ -930,8 +929,105 @@ func TestSetListDotFieldExpression(t *testing.T) {
 	CheckBytecode(t, bytecode, []Bytecode{B_SET, B_DOT, B_LITERAL, Bytecode(varKey), B_LITERAL, Bytecode(varKey2), B_LITERAL, Bytecode(varVal)})
 }
 
+func TestIfExpressionFull(t *testing.T) {
+	parser := GetParserWithSource("if false { return 0 } else { return 1 }")
+	bytecode, err := parser.parse()
+
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+
+	condVal, _ := GetParserLiteral(parser, BoolLiteral, false)
+
+	if condVal == -1 {
+		t.Error("literal (Bool, false) wasn't present")
+		return
+	}
+
+	varVal, _ := GetParserLiteral(parser, IntLiteral, 0)
+
+	if varVal == -1 {
+		t.Error("literal (Int, 0) wasn't present")
+		return
+	}
+
+	varVal2, _ := GetParserLiteral(parser, IntLiteral, 1)
+
+	if varVal2 == -1 {
+		t.Error("literal (Int, 1) wasn't present")
+		return
+	}
+
+	CheckBytecode(t, bytecode, []Bytecode{B_COND_JUMP, B_LITERAL, Bytecode(condVal), 5, B_NEW_SCOPE, B_RETURN, B_LITERAL, Bytecode(varVal), B_END_SCOPE, 5, B_NEW_SCOPE, B_RETURN, B_LITERAL, Bytecode(varVal2), B_END_SCOPE})
+}
+
+func TestIfExpressionFullCursed(t *testing.T) {
+	parser := GetParserWithSource("if false return 0 else return 1")
+	bytecode, err := parser.parse()
+
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+
+	condVal, _ := GetParserLiteral(parser, BoolLiteral, false)
+
+	if condVal == -1 {
+		t.Error("literal (Bool, false) wasn't present")
+		return
+	}
+
+	varVal, _ := GetParserLiteral(parser, IntLiteral, 0)
+
+	if varVal == -1 {
+		t.Error("literal (Int, 0) wasn't present")
+		return
+	}
+
+	varVal2, _ := GetParserLiteral(parser, IntLiteral, 1)
+
+	if varVal2 == -1 {
+		t.Error("literal (Int, 1) wasn't present")
+		return
+	}
+
+	CheckBytecode(t, bytecode, []Bytecode{B_COND_JUMP, B_LITERAL, Bytecode(condVal), 3, B_RETURN, B_LITERAL, Bytecode(varVal), 3, B_RETURN, B_LITERAL, Bytecode(varVal2)})
+}
+
+func TestIfExpressionNoElse(t *testing.T) {
+	parser := GetParserWithSource("if false { return 0 }")
+	bytecode, err := parser.parse()
+
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+
+	condVal, _ := GetParserLiteral(parser, BoolLiteral, false)
+
+	if condVal == -1 {
+		t.Error("literal (Bool, false) wasn't present")
+		return
+	}
+
+	varVal, _ := GetParserLiteral(parser, IntLiteral, 0)
+
+	if varVal == -1 {
+		t.Error("literal (Int, 0) wasn't present")
+		return
+	}
+
+	CheckBytecode(t, bytecode, []Bytecode{B_COND_JUMP, B_LITERAL, Bytecode(condVal), 5, B_NEW_SCOPE, B_RETURN, B_LITERAL, Bytecode(varVal), B_END_SCOPE, 0})
+}
+
 func CheckBytecode(t *testing.T, result []Bytecode, expected []Bytecode) bool {
 	fmt.Printf("Checking chunks: %v ?? %v\n", result, expected)
+
+	if len(result) != len(expected) {
+		t.Error("bytecode don't match")
+		return false
+	}
 
 	for idx, val := range expected {
 		t.Logf("checking bytecode %d ?? %d", val, result[idx])
