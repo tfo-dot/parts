@@ -31,6 +31,7 @@ var ValidOperators = map[string]string{
 	"|>": "OBJ_START",
 	"<|": "OBJ_END",
 	"#>": "META",
+	"==": "EQUALITY",
 }
 
 const (

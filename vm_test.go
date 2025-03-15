@@ -634,3 +634,62 @@ func TestIfNoElse(t *testing.T) {
 		return
 	}
 }
+
+func TestMath(t *testing.T) {
+	type TestStruct struct {
+		Res int `parts:"res"`
+	}
+
+	vm, err := GetVMWithSource(`let res = 3 * ((10 + 10 + 5) - (2 * (1/1)))`)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	err = vm.Run()
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var testStruct TestStruct
+
+	ReadFromParts(vm, &testStruct)
+
+	if testStruct.Res != 69 {
+		t.Errorf("field value didn't matched got (%d) expected (%d)", testStruct.Res, 69)
+		return
+	}
+}
+
+
+func TestEq(t *testing.T) {
+	type TestStruct struct {
+		Res bool `parts:"res"`
+	}
+
+	vm, err := GetVMWithSource(`let res = true == true`)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	err = vm.Run()
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var testStruct TestStruct
+
+	ReadFromParts(vm, &testStruct)
+
+	if testStruct.Res != true {
+		t.Errorf("field value didn't matched got (%t) expected (%t)", testStruct.Res, true)
+		return
+	}
+}

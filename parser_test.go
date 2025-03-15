@@ -1021,6 +1021,101 @@ func TestIfExpressionNoElse(t *testing.T) {
 	CheckBytecode(t, bytecode, []Bytecode{B_COND_JUMP, B_LITERAL, Bytecode(condVal), 5, B_NEW_SCOPE, B_RETURN, B_LITERAL, Bytecode(varVal), B_END_SCOPE, 0})
 }
 
+func TestMathAdd(t *testing.T) {
+	parser := GetParserWithSource("1 + 1")
+	bytecode, err := parser.parse()
+
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+
+	varVal, _ := GetParserLiteral(parser, IntLiteral, 1)
+
+	if varVal == -1 {
+		t.Error("literal (Int, 1) wasn't present")
+		return
+	}
+
+	CheckBytecode(t, bytecode, []Bytecode{B_OP_ADD, B_LITERAL, Bytecode(varVal), B_LITERAL, Bytecode(varVal)})
+}
+
+func TestMathSub(t *testing.T) {
+	parser := GetParserWithSource("1 - 1")
+	bytecode, err := parser.parse()
+
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+
+	varVal, _ := GetParserLiteral(parser, IntLiteral, 1)
+
+	if varVal == -1 {
+		t.Error("literal (Int, 1) wasn't present")
+		return
+	}
+
+	CheckBytecode(t, bytecode, []Bytecode{B_OP_MIN, B_LITERAL, Bytecode(varVal), B_LITERAL, Bytecode(varVal)})
+}
+
+func TestMathMul(t *testing.T) {
+	parser := GetParserWithSource("1 * 1")
+	bytecode, err := parser.parse()
+
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+
+	varVal, _ := GetParserLiteral(parser, IntLiteral, 1)
+
+	if varVal == -1 {
+		t.Error("literal (Int, 1) wasn't present")
+		return
+	}
+
+	CheckBytecode(t, bytecode, []Bytecode{B_OP_MUL, B_LITERAL, Bytecode(varVal), B_LITERAL, Bytecode(varVal)})
+}
+
+func TestMathDiv(t *testing.T) {
+	parser := GetParserWithSource("1 / 1")
+	bytecode, err := parser.parse()
+
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+
+	varVal, _ := GetParserLiteral(parser, IntLiteral, 1)
+
+	if varVal == -1 {
+		t.Error("literal (Int, 1) wasn't present")
+		return
+	}
+
+	CheckBytecode(t, bytecode, []Bytecode{B_OP_DIV, B_LITERAL, Bytecode(varVal), B_LITERAL, Bytecode(varVal)})
+}
+
+func TestOpEq(t *testing.T) {
+	parser := GetParserWithSource("1 == 1")
+	bytecode, err := parser.parse()
+
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+
+	varVal, _ := GetParserLiteral(parser, IntLiteral, 1)
+
+	if varVal == -1 {
+		t.Error("literal (Int, 1) wasn't present")
+		return
+	}
+
+	CheckBytecode(t, bytecode, []Bytecode{B_OP_EQ, B_LITERAL, Bytecode(varVal), B_LITERAL, Bytecode(varVal)})
+}
+
 func CheckBytecode(t *testing.T, result []Bytecode, expected []Bytecode) bool {
 	fmt.Printf("Checking chunks: %v ?? %v\n", result, expected)
 

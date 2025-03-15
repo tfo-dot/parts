@@ -448,8 +448,145 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 				}
 			}
 		}
+	case B_OP_ADD, B_OP_MIN, B_OP_MUL, B_OP_DIV, B_OP_EQ:
+		rVal, err := vm.runOp()
+
+		if err != nil {
+			return UndefinedExpression, nil, errors.Join(errors.New("got error while running operation"), err)
+		}
+
+		return TypeLiteral, rVal, nil
 	default:
 		return UndefinedExpression, nil, fmt.Errorf("unrecognized bytecode: %d", vm.Code[vm.Idx])
+	}
+}
+
+func (vm *VM) runOp() (*Literal, error) {
+	switch vm.Code[vm.Idx] {
+	case B_OP_ADD:
+		vm.Idx++
+
+		exprType, left, err := vm.runExpr(true)
+
+		if err != nil {
+			return nil, errors.Join(errors.New("got error while running add (left operand)"), err)
+		}
+
+		if exprType != TypeLiteral {
+			return nil, fmt.Errorf("expected value got %d (running dot accessor)", exprType)
+		}
+
+		exprType, right, err := vm.runExpr(true)
+
+		if err != nil {
+			return nil, errors.Join(errors.New("got error while running add (left operand)"), err)
+		}
+
+		if exprType != TypeLiteral {
+			return nil, fmt.Errorf("expected value got %d (running dot accessor)", exprType)
+		}
+
+		return left.(*Literal).opAdd(right.(*Literal))
+	case B_OP_MIN:
+		vm.Idx++
+
+		exprType, left, err := vm.runExpr(true)
+
+		if err != nil {
+			return nil, errors.Join(errors.New("got error while running subtract (left operand)"), err)
+		}
+
+		if exprType != TypeLiteral {
+			return nil, fmt.Errorf("expected value got %d (running dot accessor)", exprType)
+		}
+
+		exprType, right, err := vm.runExpr(true)
+
+		if err != nil {
+			return nil, errors.Join(errors.New("got error while running subtract (left operand)"), err)
+		}
+
+		if exprType != TypeLiteral {
+			return nil, fmt.Errorf("expected value got %d (running dot accessor)", exprType)
+		}
+
+		return left.(*Literal).opSub(right.(*Literal))
+	case B_OP_DIV:
+		vm.Idx++
+
+		exprType, left, err := vm.runExpr(true)
+
+		if err != nil {
+			return nil, errors.Join(errors.New("got error while running divide (left operand)"), err)
+		}
+
+		if exprType != TypeLiteral {
+			return nil, fmt.Errorf("expected value got %d (running dot accessor)", exprType)
+		}
+
+		exprType, right, err := vm.runExpr(true)
+
+		if err != nil {
+			return nil, errors.Join(errors.New("got error while running divide (left operand)"), err)
+		}
+
+		if exprType != TypeLiteral {
+			return nil, fmt.Errorf("expected value got %d (running dot accessor)", exprType)
+		}
+
+		return left.(*Literal).opDiv(right.(*Literal))
+
+	case B_OP_MUL:
+		vm.Idx++
+
+		exprType, left, err := vm.runExpr(true)
+
+		if err != nil {
+			return nil, errors.Join(errors.New("got error while running times (left operand)"), err)
+		}
+
+		if exprType != TypeLiteral {
+			return nil, fmt.Errorf("expected value got %d (running dot accessor)", exprType)
+		}
+
+		exprType, right, err := vm.runExpr(true)
+
+		if err != nil {
+			return nil, errors.Join(errors.New("got error while running times (left operand)"), err)
+		}
+
+		if exprType != TypeLiteral {
+			return nil, fmt.Errorf("expected value got %d (running dot accessor)", exprType)
+		}
+
+		return left.(*Literal).opMul(right.(*Literal))
+	case B_OP_EQ:
+		vm.Idx++
+
+		exprType, left, err := vm.runExpr(true)
+
+		if err != nil {
+			return nil, errors.Join(errors.New("got error while running times (left operand)"), err)
+		}
+
+		if exprType != TypeLiteral {
+			return nil, fmt.Errorf("expected value got %d (running dot accessor)", exprType)
+		}
+
+		exprType, right, err := vm.runExpr(true)
+
+		if err != nil {
+			return nil, errors.Join(errors.New("got error while running times (left operand)"), err)
+		}
+
+		if exprType != TypeLiteral {
+			return nil, fmt.Errorf("expected value got %d (running dot accessor)", exprType)
+		}
+
+		return left.(*Literal).opEq(right.(*Literal))
+
+	default:
+		return nil, fmt.Errorf("unrecognized operation: %d", vm.Code[vm.Idx])
 	}
 }
 

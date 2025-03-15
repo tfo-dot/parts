@@ -340,6 +340,70 @@ func (p *Parser) parseExpression() ([]Bytecode, error) {
 		break
 	}
 
+	for {
+		if p.matchOperator("PLUS") {
+			elt, err := p.parseExpression()
+
+			if err != nil {
+				return []Bytecode{}, errors.Join(errors.New("expected expression, got error"), err)
+			}
+
+			rVal = append(append([]Bytecode{B_OP_ADD}, rVal...), elt...)
+
+			continue
+		}
+
+		if p.matchOperator("MINUS") {
+			elt, err := p.parseExpression()
+
+			if err != nil {
+				return []Bytecode{}, errors.Join(errors.New("expected expression, got error"), err)
+			}
+
+			rVal = append(append([]Bytecode{B_OP_MIN}, rVal...), elt...)
+
+			continue
+		}
+
+		if p.matchOperator("STAR") {
+			elt, err := p.parseExpression()
+
+			if err != nil {
+				return []Bytecode{}, errors.Join(errors.New("expected expression, got error"), err)
+			}
+
+			rVal = append(append([]Bytecode{B_OP_MUL}, rVal...), elt...)
+
+			continue
+		}
+
+		if p.matchOperator("SLASH") {
+			elt, err := p.parseExpression()
+
+			if err != nil {
+				return []Bytecode{}, errors.Join(errors.New("expected expression, got error"), err)
+			}
+
+			rVal = append(append([]Bytecode{B_OP_DIV}, rVal...), elt...)
+
+			continue
+		}
+
+		if p.matchOperator("EQUALITY") {
+			elt, err := p.parseExpression()
+
+			if err != nil {
+				return []Bytecode{}, errors.Join(errors.New("expected expression, got error"), err)
+			}
+
+			rVal = append(append([]Bytecode{B_OP_EQ}, rVal...), elt...)
+
+			continue
+		}
+
+		break
+	}
+
 	if p.matchOperator("LEFT_PAREN") {
 		argsCount := 0
 		arguments := make([]Bytecode, 0)
@@ -653,6 +717,11 @@ const (
 	B_RESOLVE
 	B_COND_JUMP
 	B_JUMP
+	B_OP_ADD
+	B_OP_MIN
+	B_OP_MUL
+	B_OP_DIV
+	B_OP_EQ
 )
 
 type ReferenceDeclaration struct {

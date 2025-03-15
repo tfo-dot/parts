@@ -117,3 +117,250 @@ func (l *Literal) ToGoTypes(vm *VM) (any, error) {
 
 	return nil, errors.New("invalid type to convert")
 }
+
+func (l *Literal) opAdd(other *Literal) (*Literal, error) {
+	if l.LiteralType == RefLiteral || other.LiteralType == RefLiteral {
+		return nil, errors.New("got reference, expected value")
+	}
+
+	switch l.LiteralType {
+	case IntLiteral, DoubleLiteral:
+		switch other.LiteralType {
+		case IntLiteral:
+
+			if l.LiteralType == IntLiteral {
+				return &Literal{IntLiteral, l.Value.(int) + other.Value.(int)}, nil
+			} else {
+				return &Literal{DoubleLiteral, l.Value.(float64) + float64(other.Value.(int))}, nil
+			}
+
+		case DoubleLiteral:
+
+			if l.LiteralType == IntLiteral {
+				return &Literal{IntLiteral, l.Value.(int) + int(other.Value.(float64))}, nil
+			} else {
+				return &Literal{DoubleLiteral, l.Value.(float64) + other.Value.(float64)}, nil
+			}
+
+		case BoolLiteral:
+			val := 0
+
+			if other.Value.(bool) {
+				val = 1
+			}
+
+			if l.LiteralType == IntLiteral {
+				return &Literal{IntLiteral, l.Value.(int) + val}, nil
+			} else {
+				return &Literal{DoubleLiteral, l.Value.(float64) + float64(val)}, nil
+			}
+		case StringLiteral, FunLiteral, ObjLiteral, ListLiteral, ParsedListLiteral, ParsedObjLiteral:
+			return nil, fmt.Errorf("operation not supported - add (number, %d)", other.LiteralType)
+		}
+	case BoolLiteral:
+		switch other.LiteralType {
+		case IntLiteral, DoubleLiteral:
+			return other.opAdd(l)
+		case BoolLiteral:
+			lhs, _ := l.Value.(bool)
+			rhs, _ := other.Value.(bool)
+
+			return &Literal{BoolLiteral, lhs || rhs}, nil
+		case StringLiteral, FunLiteral, ObjLiteral, ListLiteral, ParsedListLiteral, ParsedObjLiteral:
+			return nil, fmt.Errorf("operation not supported - add (bool, %d)", other.LiteralType)
+		}
+	case StringLiteral:
+		switch other.LiteralType {
+		case IntLiteral:
+			return &Literal{StringLiteral, fmt.Sprintf("%s%d", l.Value.(string), other.Value.(int))}, nil
+		case DoubleLiteral:
+			return &Literal{StringLiteral, fmt.Sprintf("%s%f", l.Value.(string), other.Value.(float64))}, nil
+		case BoolLiteral:
+			return &Literal{StringLiteral, fmt.Sprintf("%s%t", l.Value.(string), other.Value.(bool))}, nil
+		case StringLiteral:
+			return &Literal{StringLiteral, fmt.Sprintf("%s%s", l.Value.(string), other.Value.(string))}, nil
+		case FunLiteral, ObjLiteral, ListLiteral, ParsedListLiteral, ParsedObjLiteral:
+			return nil, fmt.Errorf("operation not supported - add (string, %d)", other.LiteralType)
+		}
+	case ListLiteral:
+		idx := len(l.Value.(PartsObject).Entries)
+
+		l.Value.(PartsObject).Entries[fmt.Sprintf("IT%d", idx)] = other
+
+		return l, nil
+	case FunLiteral, ObjLiteral, ParsedObjLiteral:
+		return nil, fmt.Errorf("operation not supported - add (fun|obj, %d)", other.LiteralType)
+	}
+
+	return nil, fmt.Errorf("unexpected value type %d + %d", l.LiteralType, other.LiteralType)
+}
+
+func (l *Literal) opSub(other *Literal) (*Literal, error) {
+	if l.LiteralType == RefLiteral || other.LiteralType == RefLiteral {
+		return nil, errors.New("got reference, expected value")
+	}
+
+	switch l.LiteralType {
+	case IntLiteral, DoubleLiteral:
+		switch other.LiteralType {
+		case IntLiteral:
+
+			if l.LiteralType == IntLiteral {
+				return &Literal{IntLiteral, l.Value.(int) - other.Value.(int)}, nil
+			} else {
+				return &Literal{DoubleLiteral, l.Value.(float64) - float64(other.Value.(int))}, nil
+			}
+
+		case DoubleLiteral:
+
+			if l.LiteralType == IntLiteral {
+				return &Literal{IntLiteral, l.Value.(int) - int(other.Value.(float64))}, nil
+			} else {
+				return &Literal{DoubleLiteral, l.Value.(float64) - other.Value.(float64)}, nil
+			}
+
+		case BoolLiteral:
+			val := 0
+
+			if other.Value.(bool) {
+				val = 1
+			}
+
+			if l.LiteralType == IntLiteral {
+				return &Literal{IntLiteral, l.Value.(int) - val}, nil
+			} else {
+				return &Literal{DoubleLiteral, l.Value.(float64) - float64(val)}, nil
+			}
+		case StringLiteral, FunLiteral, ObjLiteral, ListLiteral, ParsedListLiteral, ParsedObjLiteral:
+			return nil, fmt.Errorf("operation not supported - subtract (number, %d)", other.LiteralType)
+		}
+	case FunLiteral, ObjLiteral, ParsedObjLiteral, StringLiteral, ListLiteral, BoolLiteral:
+		return nil, fmt.Errorf("operation not supported - subtract (fun|obj|string|list|bool, %d)", other.LiteralType)
+	}
+
+	return nil, fmt.Errorf("unexpected value type %d - %d", l.LiteralType, other.LiteralType)
+}
+
+func (l *Literal) opMul(other *Literal) (*Literal, error) {
+	if l.LiteralType == RefLiteral || other.LiteralType == RefLiteral {
+		return nil, errors.New("got reference, expected value")
+	}
+
+	switch l.LiteralType {
+	case IntLiteral, DoubleLiteral:
+		switch other.LiteralType {
+		case IntLiteral:
+
+			if l.LiteralType == IntLiteral {
+				return &Literal{IntLiteral, l.Value.(int) * other.Value.(int)}, nil
+			} else {
+				return &Literal{DoubleLiteral, l.Value.(float64) * float64(other.Value.(int))}, nil
+			}
+
+		case DoubleLiteral:
+
+			if l.LiteralType == IntLiteral {
+				return &Literal{IntLiteral, l.Value.(int) * int(other.Value.(float64))}, nil
+			} else {
+				return &Literal{DoubleLiteral, l.Value.(float64) * other.Value.(float64)}, nil
+			}
+
+		case BoolLiteral:
+			val := 0
+
+			if other.Value.(bool) {
+				val = 1
+			}
+
+			if l.LiteralType == IntLiteral {
+				return &Literal{IntLiteral, l.Value.(int) * val}, nil
+			} else {
+				return &Literal{DoubleLiteral, l.Value.(float64) * float64(val)}, nil
+			}
+		case StringLiteral, FunLiteral, ObjLiteral, ListLiteral, ParsedListLiteral, ParsedObjLiteral:
+			return nil, fmt.Errorf("operation not supported - times (number, %d)", other.LiteralType)
+		}
+	case BoolLiteral:
+		switch other.LiteralType {
+		case IntLiteral, DoubleLiteral:
+			return other.opAdd(l)
+		case BoolLiteral:
+			lhs, _ := l.Value.(bool)
+			rhs, _ := other.Value.(bool)
+
+			return &Literal{BoolLiteral, lhs && rhs}, nil
+		case StringLiteral, FunLiteral, ObjLiteral, ListLiteral, ParsedListLiteral, ParsedObjLiteral:
+			return nil, fmt.Errorf("operation not supported - times (bool, %d)", other.LiteralType)
+		}
+	case FunLiteral, ObjLiteral, ParsedObjLiteral, ListLiteral, StringLiteral:
+		return nil, fmt.Errorf("operation not supported - times (fun|obj|list|str, %d)", other.LiteralType)
+	}
+
+	return nil, fmt.Errorf("unexpected value type %d * %d", l.LiteralType, other.LiteralType)
+}
+
+func (l *Literal) opDiv(other *Literal) (*Literal, error) {
+	if l.LiteralType == RefLiteral || other.LiteralType == RefLiteral {
+		return nil, errors.New("got reference, expected value")
+	}
+
+	switch l.LiteralType {
+	case IntLiteral, DoubleLiteral:
+		switch other.LiteralType {
+		case IntLiteral:
+			if other.Value == 0 {
+				return nil, errors.New("dividing by zero")
+			}
+
+			if l.LiteralType == IntLiteral {
+				return &Literal{IntLiteral, l.Value.(int) / other.Value.(int)}, nil
+			} else {
+				return &Literal{DoubleLiteral, l.Value.(float64) / float64(other.Value.(int))}, nil
+			}
+
+		case DoubleLiteral:
+			if other.Value == 0 {
+				return nil, errors.New("dividing by zero")
+			}
+
+			if l.LiteralType == IntLiteral {
+				return &Literal{IntLiteral, l.Value.(int) * int(other.Value.(float64))}, nil
+			} else {
+				return &Literal{DoubleLiteral, l.Value.(float64) * other.Value.(float64)}, nil
+			}
+		case StringLiteral, FunLiteral, ObjLiteral, ListLiteral, ParsedListLiteral, ParsedObjLiteral, BoolLiteral:
+			return nil, fmt.Errorf("operation not supported - div (number, %d)", other.LiteralType)
+		}
+	case FunLiteral, ObjLiteral, ParsedObjLiteral, ListLiteral, StringLiteral, BoolLiteral:
+		return nil, fmt.Errorf("operation not supported - div (fun|obj|list|str|bool, %d)", other.LiteralType)
+	}
+
+	return nil, fmt.Errorf("unexpected value type %d / %d", l.LiteralType, other.LiteralType)
+}
+
+func (l *Literal) opEq(other *Literal) (*Literal, error) {
+	if l.LiteralType != other.LiteralType {
+		return &Literal{BoolLiteral, false}, nil
+	}
+
+	if l.LiteralType == RefLiteral {
+		return nil, errors.New("expected value got reference")
+	}
+
+	switch l.LiteralType {
+	case IntLiteral:
+		return &Literal{BoolLiteral, l.Value.(int) == other.Value.(int)}, nil
+	case DoubleLiteral:
+		return &Literal{BoolLiteral, l.Value.(float64) == other.Value.(float64)}, nil
+	case BoolLiteral:
+		return &Literal{BoolLiteral, l.Value.(bool) == other.Value.(bool)}, nil
+	case StringLiteral:
+		return &Literal{BoolLiteral, l.Value.(string) == other.Value.(string)}, nil
+	case ObjLiteral, ParsedObjLiteral:
+		return nil, errors.New("object check not implemented")
+	case ListLiteral, ParsedListLiteral:
+		return nil, errors.New("list check not implemented")
+	default:
+		return nil, errors.New("equality cannot be checked")
+	}
+}
