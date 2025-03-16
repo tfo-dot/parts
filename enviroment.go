@@ -15,7 +15,7 @@ func (env *VMEnviroment) define(key string, value *Literal) (*Literal, error) {
 	_, exists := env.Values[key]
 
 	if exists {
-		return nil, errors.New("redefining variable in the same scope")
+		return nil, fmt.Errorf("redefining variable in the same scope ('%s')", key)
 	}
 
 	env.Values[key] = value

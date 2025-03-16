@@ -364,3 +364,24 @@ func (l *Literal) opEq(other *Literal) (*Literal, error) {
 		return nil, errors.New("equality cannot be checked")
 	}
 }
+
+func (l *Literal) pretify() string {
+	switch l.LiteralType {
+	case IntLiteral:
+		return fmt.Sprintf("%d", l.Value.(int))
+	case DoubleLiteral:
+		return fmt.Sprintf("%f", l.Value.(float64))
+	case BoolLiteral:
+		return fmt.Sprintf("%t", l.Value.(bool))
+	case StringLiteral:
+		return l.Value.(string)
+	case ObjLiteral, ParsedObjLiteral:
+		//TODO finish that
+		return ""
+	case ListLiteral, ParsedListLiteral:
+		//TODO finish that
+		return ""
+	default:
+		panic("OH")
+	}
+}

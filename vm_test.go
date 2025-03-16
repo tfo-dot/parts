@@ -2,6 +2,8 @@ package parts
 
 import (
 	"errors"
+	"io"
+	"os"
 	"testing"
 )
 
@@ -691,5 +693,18 @@ func TestEq(t *testing.T) {
 	if testStruct.Res != true {
 		t.Errorf("field value didn't matched got (%t) expected (%t)", testStruct.Res, true)
 		return
+	}
+}
+
+func TestPrint(t *testing.T) {
+	vm, err := GetVMWithSource(`print("woah")`)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	if err := vm.Run(); err != nil {
+		t.Error(err)
 	}
 }

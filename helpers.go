@@ -45,10 +45,15 @@ func GetVMWithSource(source string) (*VM, error) {
 		literals[idx] = &literal 
 	}
 
+	vmEnv := VMEnviroment{
+			Enclosing: nil,
+			Values:    StandardLibrary,
+		}
+
 	return &VM{
 		Enviroment: &VMEnviroment{
-			Enclosing: nil,
-			Values:    make(map[string]*Literal),
+			Enclosing: &vmEnv,
+			Values: make(map[string]*Literal),
 		},
 		Idx:      0,
 		Code:     code,
@@ -80,10 +85,15 @@ func RunString(codeString string) (VM, error) {
 		literals = append(literals, &literal)
 	}
 
+	vmEnv := VMEnviroment{
+			Enclosing: nil,
+			Values:    StandardLibrary,
+		}
+
 	vm := VM{
 		Enviroment: &VMEnviroment{
-			Enclosing: nil,
-			Values:    make(map[string]*Literal),
+			Enclosing: &vmEnv,
+			Values: make(map[string]*Literal),
 		},
 		Idx:      0,
 		Code:     code,

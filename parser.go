@@ -178,7 +178,7 @@ func (p *Parser) parseExpression() ([]Bytecode, error) {
 		}
 
 		declaration := FunctionDeclaration{
-			Params: [][]rune{},
+			Params: []string{},
 			Body:   []Bytecode{},
 		}
 
@@ -190,7 +190,7 @@ func (p *Parser) parseExpression() ([]Bytecode, error) {
 					return []Bytecode{}, errors.Join(errors.New("encountered unexpected token in function params"), err)
 				}
 
-				declaration.Params = append(declaration.Params, identifierToken.Value)
+				declaration.Params = append(declaration.Params, string(identifierToken.Value))
 			}
 		}
 
@@ -730,7 +730,7 @@ type ReferenceDeclaration struct {
 }
 
 type FunctionDeclaration struct {
-	Params [][]rune
+	Params []string
 	Body   []Bytecode
 }
 

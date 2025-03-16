@@ -327,7 +327,7 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 
 		vm.Enviroment = &newEnv
 
-		funcDeclaration := resolvedExpr.Value.(FunctionDeclaration)
+		funcObj := resolvedExpr.Value.(PartsCallable)
 
 		values := make([]*Literal, vm.Code[vm.Idx])
 
@@ -349,11 +349,13 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 			values[i] = resolvedExpr
 		}
 
-		for idx, param := range funcDeclaration.Params {
+		tempVM := vm.copyVM()
+
+		for idx, param := range funcObj.GetArguments() {
 			vm.Enviroment.define(fmt.Sprintf("RT%s", string(param)), values[idx])
 		}
 
-		tempVM := vm.newVM(funcDeclaration.Body)
+		funcObj.Call(&tempVM)
 
 		if err = tempVM.Run(); err != nil {
 			return UndefinedExpression, nil, errors.Join(errors.New("got error while running function body"), err)
@@ -602,7 +604,6 @@ const (
 
 func (vm *VM) simplifyLiteral(literal *Literal, resolveRef bool) (*Literal, error) {
 	if literal.LiteralType == RefLiteral && resolveRef {
-
 		if literal.Value.(ReferenceDeclaration).Dynamic {
 			return literal, nil
 		}
@@ -690,6 +691,23 @@ type PartsObject struct {
 	Entries map[string]*Literal
 }
 
+type PartsCallable interface {
+	Call(vm *VM)
+	GetArguments() []string 
+}
+
+func (f FunctionDeclaration) Call(vm *VM) {
+	vm.Code = f.Body
+
+	if err := vm.Run(); err != nil {
+		panic(err)
+	}
+}
+
+func (f FunctionDeclaration) GetArguments() []string {
+	return f.Params
+}
+
 func (vm *VM) decodeLen() (int, error) {
 	if vm.Code[vm.Idx] <= 125 {
 		value := vm.Code[vm.Idx]
@@ -717,11 +735,25 @@ func (vm *VM) decodeLen() (int, error) {
 }
 
 func (vm *VM) newVM(code []Bytecode) VM {
+	v := vm.copyVM()
+
+	v.Code = code
+
+	return v
+}
+
+func (vm *VM) copyVM() VM {
+
+	env := VMEnviroment{
+		Enclosing: vm.Enviroment,
+		Values:    make(map[string]*Literal),
+	}
+
 	return VM{
-		Enviroment:  vm.Enviroment,
+		Enviroment:  &env,
 		Idx:         0,
 		ReturnValue: nil,
-		Code:        code,
+		Code:        []Bytecode{},
 		Literals:    vm.Literals,
 		Meta:        vm.Meta,
 	}
