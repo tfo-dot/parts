@@ -1,0 +1,10 @@
+let Id = "LV0_Dragon"
+let HP = 300
+let SPD = 40
+let ATK = 60
+let Name = "Smok"
+
+let Loot = [
+  |> Type: 1, Count: 130 <|,
+  |> Type: 2, Count: 315 <|
+]

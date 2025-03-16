@@ -36,7 +36,7 @@ func GetVMWithSource(source string) (*VM, error) {
 	code, err := parser.parseAll()
 
 	if err != nil {
-		return &VM{}, errors.Join(errors.New("got error from within parser"), err)
+		return nil, errors.Join(errors.New("got error from within parser"), err)
 	}
 
 	literals := make([]*Literal, len(parser.Literals))
@@ -62,7 +62,7 @@ func GetVMWithSource(source string) (*VM, error) {
 	}, nil
 }
 
-func RunString(codeString string) (VM, error) {
+func RunString(codeString string) (*VM, error) {
 	scanner := GetScannerWithSource(codeString)
 
 	parser := Parser{
@@ -76,13 +76,13 @@ func RunString(codeString string) (VM, error) {
 	code, err := parser.parseAll()
 
 	if err != nil {
-		return VM{}, errors.Join(errors.New("got error from within parser"), err)
+		return nil, errors.Join(errors.New("got error from within parser"), err)
 	}
 
 	literals := make([]*Literal, len(parser.Literals))
 
-	for _, literal := range parser.Literals {
-		literals = append(literals, &literal)
+	for idx, literal := range parser.Literals {
+		literals[idx] = &literal
 	}
 
 	vmEnv := VMEnviroment{
@@ -104,10 +104,10 @@ func RunString(codeString string) (VM, error) {
 	err = vm.Run()
 
 	if err != nil {
-		return VM{}, err
+		return nil, err
 	}
 
-	return vm, nil
+	return &vm, nil
 }
 
 func ReadFromParts[T any](vm *VM, out *T) {

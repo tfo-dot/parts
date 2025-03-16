@@ -2,7 +2,6 @@ package parts
 
 import (
 	"errors"
-	"io"
 	"os"
 	"testing"
 )
@@ -696,8 +695,84 @@ func TestEq(t *testing.T) {
 	}
 }
 
+func TestReadFile(t *testing.T) {
+		type LootStruct struct {
+		Type  int
+		Count int
+	}
+
+	type TestStruct struct {
+		Id   string
+		HP   int
+		SPD  int
+		ATK  int
+		Name string
+
+		Loot []LootStruct
+	}
+
+	fileContent, err := os.ReadFile("./test_file.pts")
+
+	vm, err := RunString(string(fileContent))
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	err = vm.Run()
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var testStruct TestStruct
+
+	ReadFromParts(vm, &testStruct)
+
+	if testStruct.Id != "LV0_Dragon" {
+		t.Errorf("field value didn't matched got (%s) expected (%s)", testStruct.Id, "LV0_Dragon")
+		return
+	}
+
+	if testStruct.HP != 300 {
+		t.Errorf("field value didn't matched got (%d) expected (%d)", testStruct.HP, 300)
+		return
+	}
+
+	if testStruct.SPD != 40 {
+		t.Errorf("field value didn't matched got (%d) expected (%d)", testStruct.SPD, 40)
+		return
+	}
+
+	if testStruct.ATK != 60 {
+		t.Errorf("field value didn't matched got (%d) expected (%d)", testStruct.ATK, 60)
+		return
+	}
+
+	if testStruct.Name != "Smok" {
+		t.Errorf("field value didn't matched got (%s) expected (%s)", testStruct.Name, "Smok")
+		return
+	}
+
+	expectedLoot := []LootStruct{{Type: 1, Count: 130}, {Type: 2, Count: 315}}
+
+	for i, val := range testStruct.Loot {
+		if val.Count != expectedLoot[i].Count {
+			t.Errorf("inexpected values in the interface got (%d) expected (%d)", val.Count, expectedLoot[i].Count)
+			return
+		}
+
+		if val.Type != expectedLoot[i].Type {
+			t.Errorf("inexpected values in the interface got (%d) expected (%d)", val.Type, expectedLoot[i].Type)
+			return
+		}
+	}
+}
+
 func TestPrint(t *testing.T) {
-	vm, err := GetVMWithSource(`print("woah")`)
+	vm, err := GetVMWithSource(`printLn("woah")`)
 
 	if err != nil {
 		t.Error(err)

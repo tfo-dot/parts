@@ -693,7 +693,7 @@ type PartsObject struct {
 
 type PartsCallable interface {
 	Call(vm *VM)
-	GetArguments() []string 
+	GetArguments() []string
 }
 
 func (f FunctionDeclaration) Call(vm *VM) {
