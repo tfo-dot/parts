@@ -665,7 +665,6 @@ func TestMath(t *testing.T) {
 	}
 }
 
-
 func TestEq(t *testing.T) {
 	type TestStruct struct {
 		Res bool `parts:"res"`
@@ -696,7 +695,7 @@ func TestEq(t *testing.T) {
 }
 
 func TestReadFile(t *testing.T) {
-		type LootStruct struct {
+	type LootStruct struct {
 		Type  int
 		Count int
 	}
@@ -781,5 +780,161 @@ func TestPrint(t *testing.T) {
 
 	if err := vm.Run(); err != nil {
 		t.Error(err)
+	}
+}
+
+func TestStructWithMissingFields(t *testing.T) {
+	type TestStruct struct {
+		Id   string
+		HP   int
+		SPD  int
+		ATK  int
+		Name string
+	}
+
+	vm, err := RunString("let fire = true; let Id = \"Simple_Id\"")
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	err = vm.Run()
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	testStruct := TestStruct{
+		Id:   "no_id",
+		HP:   90,
+		SPD:  40,
+		ATK:  10,
+		Name: "Noname",
+	}
+
+	ReadFromParts(vm, &testStruct)
+
+	if testStruct.Id != "Simple_Id" {
+		t.Errorf("field value didn't matched got (%s) expected (%s)", testStruct.Id, "Simple_Id")
+	}
+}
+
+func TestFFIFromParts(t *testing.T) {
+	type TestStruct struct {
+		Res func(...any) (any, error) `parts:"res"`
+	}
+
+	vm, err := GetVMWithSource(`let mult = 2;fun res() = (10 * mult)`)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	err = vm.Run()
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var testStruct TestStruct
+
+	ReadFromParts(vm, &testStruct)
+
+	if testStruct.Res == nil {
+		t.Error("expected function, field was empty")
+		return
+	}
+
+	val, err := testStruct.Res()
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	if val.(int) != 20 {
+		t.Errorf("function result didn't matched got (%d) expected (%d)", val, 20)
+	}
+}
+
+func TestFFIToParts(t *testing.T) {
+	type TestStruct struct {
+		Res int `parts:"res"`
+	}
+
+	vm, err := GetVMWithSource(`let res = ffi(10)`)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	ffiFunc := func(num int) int {
+		return num * 2
+	}
+
+	vm.Enviroment.Append(&VMEnviroment{
+		Enclosing: nil,
+		Values: map[string]*Literal{
+			"RTffi": {FunLiteral, FFIFunction{ffiFunc}},
+		},
+	})
+
+	err = vm.Run()
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var testStruct TestStruct
+
+	ReadFromParts(vm, &testStruct)
+
+	if testStruct.Res != 20 {
+		t.Errorf("function result didn't matched got (%d) expected (%d)", testStruct.Res, 20)
+	}
+}
+
+func TestFFIMap(t *testing.T) {
+	type TestStruct struct {
+		Res int `parts:"res"`
+	}
+
+	vm, err := GetVMWithSource(`let res = ffi[0]`)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	ffiMap := map[int]int{
+		0: 10,
+	}
+
+	vm.Enviroment.Append(&VMEnviroment{
+		Enclosing: nil,
+		Values: map[string]*Literal{
+			"RTffi": {ParsedObjLiteral, &FFIMap[int, int]{Entries: ffiMap}},
+		},
+	})
+
+	err = vm.Run()
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var testStruct TestStruct
+
+	ReadFromParts(vm, &testStruct)
+
+	if testStruct.Res != 10 {
+		t.Errorf("function result didn't matched got (%d) expected (%d)", testStruct.Res, 10)
 	}
 }

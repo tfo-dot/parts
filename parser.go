@@ -132,8 +132,6 @@ func (p *Parser) parseTopLevel() ([]Bytecode, error) {
 }
 
 func (p *Parser) parseExpression() ([]Bytecode, error) {
-	//TODO all the cases
-
 	if p.matchKeyword("FUN") {
 		functionName := []Bytecode{}
 		{

@@ -38,22 +38,22 @@ func GetVMWithSource(source string) (*VM, error) {
 	if err != nil {
 		return nil, errors.Join(errors.New("got error from within parser"), err)
 	}
-
+	
 	literals := make([]*Literal, len(parser.Literals))
 
 	for idx, literal := range parser.Literals {
-		literals[idx] = &literal 
+		literals[idx] = &literal
 	}
 
 	vmEnv := VMEnviroment{
-			Enclosing: nil,
-			Values:    StandardLibrary,
-		}
+		Enclosing: nil,
+		Values:    StandardLibrary,
+	}
 
 	return &VM{
 		Enviroment: &VMEnviroment{
 			Enclosing: &vmEnv,
-			Values: make(map[string]*Literal),
+			Values:    make(map[string]*Literal),
 		},
 		Idx:      0,
 		Code:     code,
@@ -86,14 +86,14 @@ func RunString(codeString string) (*VM, error) {
 	}
 
 	vmEnv := VMEnviroment{
-			Enclosing: nil,
-			Values:    StandardLibrary,
-		}
+		Enclosing: nil,
+		Values:    StandardLibrary,
+	}
 
 	vm := VM{
 		Enviroment: &VMEnviroment{
 			Enclosing: &vmEnv,
-			Values: make(map[string]*Literal),
+			Values:    make(map[string]*Literal),
 		},
 		Idx:      0,
 		Code:     code,
@@ -123,19 +123,40 @@ func FillField[T any](fieldIdx int, vm *VM, out *T) {
 
 	fieldValue := reflect.ValueOf(out).Elem().Field(fieldIdx)
 
+	if !fieldValue.CanSet() {
+		return
+	}
+
 	key := field.Name
 
 	if tag, has := field.Tag.Lookup("parts"); has {
 		key = tag
 	}
 
-	rawVal, err := vm.Enviroment.resolve(fmt.Sprintf("RT%s", key))
+	key = fmt.Sprintf("RT%s", key)
+
+	if !vm.Enviroment.Has(key) {
+		if !fieldValue.IsZero() {
+			return
+		} else {
+			if !field.IsExported() {
+				return
+			}
+			panic(fmt.Errorf("field has no default value and was expected (%s)", field.Name))
+		}
+	}
+
+	rawVal, err := vm.Enviroment.resolve(key)
 
 	if err != nil {
 		panic(err)
 	}
 
 	val, err := rawVal.ToGoTypes(vm)
+
+	if err != nil {
+		panic(err)
+	}
 
 	switch field.Type.Kind() {
 	case reflect.Bool:
@@ -160,9 +181,9 @@ func FillField[T any](fieldIdx int, vm *VM, out *T) {
 		} else {
 			panic(errors.New("wrong variable type"))
 		}
-
+	case reflect.Func:
+		fieldValue.Set(reflect.ValueOf(val))
 	default:
-		//TODO handle function type
 		fmt.Printf("%s type not supported - ignoring\n", field.Type.Kind().String())
 	}
 }
@@ -206,9 +227,9 @@ func FillStruct[T any](data map[string]any, vm *VM, out T) {
 				} else {
 					panic(errors.New("wrong variable type"))
 				}
-
+			case reflect.Func:
+				fieldValue.Set(reflect.ValueOf(val))
 			default:
-				//TODO handle function type
 				fmt.Printf("%s type not supported - ignoring\n", field.Type.Kind().String())
 			}
 		}

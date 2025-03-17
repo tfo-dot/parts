@@ -154,7 +154,7 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 		switch accessor.LiteralType {
 		case ListLiteral, ObjLiteral, ParsedListLiteral, ParsedObjLiteral:
 		default:
-			return UndefinedExpression, nil, errors.New("unexpected value type")
+			return UndefinedExpression, nil, fmt.Errorf("unexpected value type (%d)", accessor.LiteralType)
 		}
 
 		if accessor.LiteralType == ListLiteral || accessor.LiteralType == ObjLiteral {
@@ -194,12 +194,8 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 
 		key, err := HashLiteral(*rawKey.(*Literal))
 
-		if err != nil {
-			return UndefinedExpression, nil, errors.Join(errors.New("got error while hashing key"), err)
-		}
-
-		if rVal, has := accessor.Value.(PartsObject).Entries[key]; has {
-			return TypeLiteral, rVal, nil
+		if has := accessor.Value.(PartsIndexable).HasByKey(key); has {
+			return TypeLiteral, accessor.Value.(PartsIndexable).GetByKey(key), nil
 		} else {
 			return UndefinedExpression, nil, fmt.Errorf("key not found: %s", key)
 		}
@@ -315,6 +311,10 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 		}
 
 		resolvedExpr, err := vm.simplifyLiteral(expr.(*Literal), true)
+
+		if err != nil {
+			return UndefinedExpression, nil, errors.Join(errors.New("got error while running expression"), err)
+		}
 
 		if resolvedExpr.LiteralType != FunLiteral {
 			return UndefinedExpression, nil, fmt.Errorf("expected function value got %d", resolvedExpr.LiteralType)
@@ -464,129 +464,53 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 }
 
 func (vm *VM) runOp() (*Literal, error) {
-	switch vm.Code[vm.Idx] {
+	opcode := vm.Code[vm.Idx]
+
+	vm.Idx++
+
+	exprType, left, err := vm.runExpr(true)
+
+	if err != nil {
+		return nil, errors.Join(errors.New("got error while running (left operand)"), err)
+	}
+
+	if exprType != TypeLiteral {
+		return nil, fmt.Errorf("expected value got %d (left operand)", exprType)
+	}
+
+	simpleLeft, err := vm.simplifyLiteral(left.(*Literal), true)
+
+	if err != nil {
+		return nil, errors.Join(errors.New("got error while simplyfing left operand"), err)
+	}
+
+	exprType, right, err := vm.runExpr(true)
+
+	if err != nil {
+		return nil, errors.Join(errors.New("got error while running (left operand)"), err)
+	}
+
+	if exprType != TypeLiteral {
+		return nil, fmt.Errorf("expected value got %d (left operand)", exprType)
+	}
+
+	simpleRight, err := vm.simplifyLiteral(right.(*Literal), true)
+
+	if err != nil {
+		return nil, errors.Join(errors.New("got error while simplyfing right operand"), err)
+	}
+
+	switch opcode {
 	case B_OP_ADD:
-		vm.Idx++
-
-		exprType, left, err := vm.runExpr(true)
-
-		if err != nil {
-			return nil, errors.Join(errors.New("got error while running add (left operand)"), err)
-		}
-
-		if exprType != TypeLiteral {
-			return nil, fmt.Errorf("expected value got %d (running dot accessor)", exprType)
-		}
-
-		exprType, right, err := vm.runExpr(true)
-
-		if err != nil {
-			return nil, errors.Join(errors.New("got error while running add (left operand)"), err)
-		}
-
-		if exprType != TypeLiteral {
-			return nil, fmt.Errorf("expected value got %d (running dot accessor)", exprType)
-		}
-
-		return left.(*Literal).opAdd(right.(*Literal))
+		return simpleLeft.opAdd(simpleRight)
 	case B_OP_MIN:
-		vm.Idx++
-
-		exprType, left, err := vm.runExpr(true)
-
-		if err != nil {
-			return nil, errors.Join(errors.New("got error while running subtract (left operand)"), err)
-		}
-
-		if exprType != TypeLiteral {
-			return nil, fmt.Errorf("expected value got %d (running dot accessor)", exprType)
-		}
-
-		exprType, right, err := vm.runExpr(true)
-
-		if err != nil {
-			return nil, errors.Join(errors.New("got error while running subtract (left operand)"), err)
-		}
-
-		if exprType != TypeLiteral {
-			return nil, fmt.Errorf("expected value got %d (running dot accessor)", exprType)
-		}
-
-		return left.(*Literal).opSub(right.(*Literal))
+		return simpleLeft.opSub(simpleRight)
 	case B_OP_DIV:
-		vm.Idx++
-
-		exprType, left, err := vm.runExpr(true)
-
-		if err != nil {
-			return nil, errors.Join(errors.New("got error while running divide (left operand)"), err)
-		}
-
-		if exprType != TypeLiteral {
-			return nil, fmt.Errorf("expected value got %d (running dot accessor)", exprType)
-		}
-
-		exprType, right, err := vm.runExpr(true)
-
-		if err != nil {
-			return nil, errors.Join(errors.New("got error while running divide (left operand)"), err)
-		}
-
-		if exprType != TypeLiteral {
-			return nil, fmt.Errorf("expected value got %d (running dot accessor)", exprType)
-		}
-
-		return left.(*Literal).opDiv(right.(*Literal))
-
+		return simpleLeft.opDiv(simpleRight)
 	case B_OP_MUL:
-		vm.Idx++
-
-		exprType, left, err := vm.runExpr(true)
-
-		if err != nil {
-			return nil, errors.Join(errors.New("got error while running times (left operand)"), err)
-		}
-
-		if exprType != TypeLiteral {
-			return nil, fmt.Errorf("expected value got %d (running dot accessor)", exprType)
-		}
-
-		exprType, right, err := vm.runExpr(true)
-
-		if err != nil {
-			return nil, errors.Join(errors.New("got error while running times (left operand)"), err)
-		}
-
-		if exprType != TypeLiteral {
-			return nil, fmt.Errorf("expected value got %d (running dot accessor)", exprType)
-		}
-
-		return left.(*Literal).opMul(right.(*Literal))
+		return simpleLeft.opMul(simpleRight)
 	case B_OP_EQ:
-		vm.Idx++
-
-		exprType, left, err := vm.runExpr(true)
-
-		if err != nil {
-			return nil, errors.Join(errors.New("got error while running times (left operand)"), err)
-		}
-
-		if exprType != TypeLiteral {
-			return nil, fmt.Errorf("expected value got %d (running dot accessor)", exprType)
-		}
-
-		exprType, right, err := vm.runExpr(true)
-
-		if err != nil {
-			return nil, errors.Join(errors.New("got error while running times (left operand)"), err)
-		}
-
-		if exprType != TypeLiteral {
-			return nil, fmt.Errorf("expected value got %d (running dot accessor)", exprType)
-		}
-
-		return left.(*Literal).opEq(right.(*Literal))
-
+		return simpleLeft.opEq(simpleRight)
 	default:
 		return nil, fmt.Errorf("unrecognized operation: %d", vm.Code[vm.Idx])
 	}
@@ -614,7 +538,7 @@ func (vm *VM) simplifyLiteral(literal *Literal, resolveRef bool) (*Literal, erro
 			return nil, errors.Join(errors.New("error resolivng reference"), rErr)
 		}
 
-		return rVal, nil
+		return vm.simplifyLiteral(rVal, resolveRef)
 	}
 
 	if literal.LiteralType == ObjLiteral {
@@ -652,7 +576,7 @@ func (vm *VM) simplifyLiteral(literal *Literal, resolveRef bool) (*Literal, erro
 			objectData.Entries[entryKey] = simplifiedValue
 		}
 
-		return &Literal{LiteralType: ParsedObjLiteral, Value: objectData}, nil
+		return &Literal{LiteralType: ParsedObjLiteral, Value: &objectData}, nil
 	}
 
 	if literal.LiteralType == ListLiteral {
@@ -681,31 +605,10 @@ func (vm *VM) simplifyLiteral(literal *Literal, resolveRef bool) (*Literal, erro
 			objectData.Entries[entryKey] = simplifiedValue
 		}
 
-		return &Literal{LiteralType: ParsedListLiteral, Value: objectData}, nil
+		return &Literal{LiteralType: ParsedListLiteral, Value: &objectData}, nil
 	}
 
 	return literal, nil
-}
-
-type PartsObject struct {
-	Entries map[string]*Literal
-}
-
-type PartsCallable interface {
-	Call(vm *VM)
-	GetArguments() []string
-}
-
-func (f FunctionDeclaration) Call(vm *VM) {
-	vm.Code = f.Body
-
-	if err := vm.Run(); err != nil {
-		panic(err)
-	}
-}
-
-func (f FunctionDeclaration) GetArguments() []string {
-	return f.Params
 }
 
 func (vm *VM) decodeLen() (int, error) {
@@ -757,4 +660,91 @@ func (vm *VM) copyVM() VM {
 		Literals:    vm.Literals,
 		Meta:        vm.Meta,
 	}
+}
+
+type PartsCallable interface {
+	Call(vm *VM)
+	GetArguments() []string
+}
+
+func (f FunctionDeclaration) Call(vm *VM) {
+	vm.Code = f.Body
+
+	if err := vm.Run(); err != nil {
+		panic(err)
+	}
+}
+
+func (f FunctionDeclaration) GetArguments() []string {
+	return f.Params
+}
+
+type PartsIndexable interface {
+	Get(key *Literal) *Literal
+	Set(key *Literal, value *Literal) *Literal
+	Has(key *Literal) bool
+
+	GetByKey(key string) *Literal
+	SetByKey(key string, value *Literal) *Literal
+	HasByKey(key string) bool
+
+	GetAll() map[string]*Literal
+	Length() int
+}
+
+type PartsObject struct {
+	Entries map[string]*Literal
+}
+
+func (o *PartsObject) Get(key *Literal) *Literal {
+	hash, err := HashLiteral(*key)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return o.GetByKey(hash)
+}
+
+func (o *PartsObject) Set(key *Literal, value *Literal) *Literal {
+	hash, err := HashLiteral(*key)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return o.SetByKey(hash, value)
+}
+
+func (o *PartsObject) Has(key *Literal) bool {
+	hash, err := HashLiteral(*key)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return o.HasByKey(hash)
+}
+
+func (o *PartsObject) Length() int {
+	return len(o.Entries)
+}
+
+func (o *PartsObject) GetAll() map[string]*Literal {
+	return o.Entries
+}
+
+func (o *PartsObject) GetByKey(key string) *Literal {
+	return o.Entries[key]
+}
+
+func (o *PartsObject) SetByKey(key string, value *Literal) *Literal {
+	o.Entries[key] = value
+
+	return value
+}
+
+func (o *PartsObject) HasByKey(key string) bool {
+	_, has := o.Entries[key]
+	return has
 }

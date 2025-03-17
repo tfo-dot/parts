@@ -1116,6 +1116,64 @@ func TestOpEq(t *testing.T) {
 	CheckBytecode(t, bytecode, []Bytecode{B_OP_EQ, B_LITERAL, Bytecode(varVal), B_LITERAL, Bytecode(varVal)})
 }
 
+func TestSomeParsing(t *testing.T) {
+	parser := GetParserWithSource("let mult = 2;fun res() = (10 * mult)")
+	bytecode, err := parser.parseAll()
+
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+
+	name, _ := GetParserLiteral(parser, RefLiteral, "mult")
+
+	if name == -1 {
+		t.Error("literal (Ref, 'mult') wasn't present")
+		return
+	}
+
+	name2, _ := GetParserLiteral(parser, RefLiteral, "res")
+
+	if name2 == -1 {
+		t.Error("literal (Ref, 'res') wasn't present")
+		return
+	}
+
+	val, _ := GetParserLiteral(parser, IntLiteral, 2)
+
+	if val == -1 {
+		t.Error("literal (Int, 2) wasn't present")
+		return
+	}
+
+	val2, _ := GetParserLiteral(parser, IntLiteral, 10)
+
+	if val2 == -1 {
+		t.Error("literal (Int, 10) wasn't present")
+		return
+	}
+
+	val3, funcObj := GetParserLiteral(parser, FunLiteral, nil)
+
+	if val3 == -1 {
+		t.Error("literal (Fun, () => int) wasn't present")
+		return
+	}
+
+	checkResult := CheckBytecode(t, bytecode, []Bytecode{
+		B_DECLARE, B_LITERAL, Bytecode(name), B_LITERAL, Bytecode(val),
+		B_DECLARE, B_LITERAL, Bytecode(name2), B_LITERAL, Bytecode(val3),
+	})
+
+	if !checkResult {
+		return
+	} else {
+		t.Log("Got through first check")
+	}
+
+	CheckBytecode(t, funcObj.Value.(FunctionDeclaration).Body, []Bytecode{B_RETURN, B_OP_MUL, B_LITERAL, Bytecode(val2), B_LITERAL, Bytecode(name)})
+}
+
 func CheckBytecode(t *testing.T, result []Bytecode, expected []Bytecode) bool {
 	fmt.Printf("Checking chunks: %v ?? %v\n", result, expected)
 

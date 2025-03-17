@@ -89,12 +89,32 @@ func (env *VMEnviroment) assignDot(vm *VM, key []*Literal, value *Literal) (*Lit
 			return nil, errors.Join(errors.New("got error while hashing key"), err)
 		}
 
-		if _, has := accessor.Value.(PartsObject).Entries[keyHash]; has {
-			accessor.Value.(PartsObject).Entries[keyHash] = value
+		if has := accessor.Value.(PartsIndexable).HasByKey(keyHash); has {
+			return accessor.Value.(PartsIndexable).SetByKey(keyHash, value), nil
 		} else {
 			return nil, fmt.Errorf("key not found: %s", keyHash)
 		}
 	}
 
 	return value, nil
+}
+
+func (env *VMEnviroment) Has(key string) bool {
+	_, exists := env.Values[key]
+
+	if !exists && env.Enclosing != nil {
+		return env.Enclosing.Has(key)
+	}
+
+	return exists
+}
+
+func (env *VMEnviroment) Append(other *VMEnviroment) {
+	deepestEnv := other
+	for deepestEnv.Enclosing != nil {
+		deepestEnv = deepestEnv.Enclosing
+	}
+
+	deepestEnv.Enclosing = env.Enclosing
+	env.Enclosing = other
 }
