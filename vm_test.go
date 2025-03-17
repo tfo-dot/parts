@@ -821,6 +821,43 @@ func TestStructWithMissingFields(t *testing.T) {
 	}
 }
 
+func TestStructWithMissingFieldsEmpty(t *testing.T) {
+	type TestStruct struct {
+		Id   string
+		HP   int
+		SPD  int
+		ATK  int
+		Name string `parts:",ignoreEmpty"`
+	}
+
+	vm, err := RunString("let fire = true; let Id = \"Simple_Id\"")
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	err = vm.Run()
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	testStruct := TestStruct{
+		Id:   "no_id",
+		HP:   90,
+		SPD:  40,
+		ATK:  10,
+	}
+
+	ReadFromParts(vm, &testStruct)
+
+	if testStruct.Id != "Simple_Id" {
+		t.Errorf("field value didn't matched got (%s) expected (%s)", testStruct.Id, "Simple_Id")
+	}
+}
+
 func TestFFIFromParts(t *testing.T) {
 	type TestStruct struct {
 		Res func(...any) (any, error) `parts:"res"`

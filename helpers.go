@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 )
 
 func GetScannerWithSource(source string) Scanner {
@@ -38,7 +39,7 @@ func GetVMWithSource(source string) (*VM, error) {
 	if err != nil {
 		return nil, errors.Join(errors.New("got error from within parser"), err)
 	}
-	
+
 	literals := make([]*Literal, len(parser.Literals))
 
 	for idx, literal := range parser.Literals {
@@ -129,8 +130,16 @@ func FillField[T any](fieldIdx int, vm *VM, out *T) {
 
 	key := field.Name
 
+	ignoreEmpty := false
+
 	if tag, has := field.Tag.Lookup("parts"); has {
-		key = tag
+		rawKey, options := parseTag(tag)
+
+		key = rawKey
+
+		if options.Contains("ignoreEmpty") {
+			ignoreEmpty = true
+		}
 	}
 
 	key = fmt.Sprintf("RT%s", key)
@@ -142,6 +151,11 @@ func FillField[T any](fieldIdx int, vm *VM, out *T) {
 			if !field.IsExported() {
 				return
 			}
+
+			if ignoreEmpty {
+				return
+			}
+
 			panic(fmt.Errorf("field has no default value and was expected (%s)", field.Name))
 		}
 	}
@@ -194,13 +208,25 @@ func FillStruct[T any](data map[string]any, vm *VM, out T) {
 
 	for i := 0; i < outType.NumField(); i++ {
 		field := outType.Field(i)
+		fieldValue := outStruct.Field(i)
+
 		key := field.Name
 
+		ignoreEmpty := false
+
 		if tag, has := field.Tag.Lookup("parts"); has {
-			key = tag
+			rawKey, options := parseTag(tag)
+
+			key = rawKey
+
+			if options.Contains("ignoreEmpty") {
+				ignoreEmpty = true
+			}
 		}
 
-		if val, ok := data[fmt.Sprintf("RT%s", key)]; ok {
+		key = fmt.Sprintf("RT%s", key)
+
+		if val, ok := data[key]; ok {
 			fieldValue := reflect.ValueOf(out).Elem().Field(i)
 
 			switch field.Type.Kind() {
@@ -231,6 +257,20 @@ func FillStruct[T any](data map[string]any, vm *VM, out T) {
 				fieldValue.Set(reflect.ValueOf(val))
 			default:
 				fmt.Printf("%s type not supported - ignoring\n", field.Type.Kind().String())
+			}
+		} else {
+			if !fieldValue.IsZero() {
+				return
+			} else {
+				if !field.IsExported() {
+					return
+				}
+
+				if ignoreEmpty {
+					return
+				}
+
+				panic(fmt.Errorf("field has no default value and was expected (%s)", field.Name))
 			}
 		}
 	}
@@ -264,4 +304,30 @@ func FillSlice[T any](fieldIdx int, data []any, vm *VM, out T) {
 	}
 
 	fieldValue.Set(newSlice)
+}
+
+/* From: https://cs.opensource.google/go/go/+/master:src/encoding/json/tags.go;l=1 */
+
+type tagOptions string
+
+func parseTag(tag string) (string, tagOptions) {
+	tag, opt, _ := strings.Cut(tag, ",")
+	return tag, tagOptions(opt)
+}
+
+func (o tagOptions) Contains(optionName string) bool {
+	if len(o) == 0 {
+		return false
+	}
+
+	s := string(o)
+
+	for s != "" {
+		var name string
+		name, s, _ = strings.Cut(s, ",")
+		if name == optionName {
+			return true
+		}
+	}
+	return false
 }
