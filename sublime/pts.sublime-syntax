@@ -1,0 +1,44 @@
+%YAML 1.2
+---
+# See more information about syntax definitions at:
+#   http://www.sublimetext.com/docs/syntaxdefs.html
+scope: source.parts
+file_extensions:
+  - pts
+
+contexts:
+  main:
+    - match: '"'
+      scope: punctuation.definition.string.begin.parts
+      push: string_double
+
+    - match: '\b(false|if|let|true|fun|return|else|static|for|class|break|continue|import|from|as)\b'
+      scope: keyword.control.parts
+
+    - match: '\b(PLUS|MINUS|SLASH|STAR|SEMICOLON|COLON|DOT|COMMA|LEFT_PAREN|RIGHT_PAREN|LEFT_BRACE|RIGHT_BRACE|LEFT_BRACKET|RIGHT_BRACKET|AT|EQUALS|OBJ_START|OBJ_END|META|EQUALITY)\b'
+      scope: keyword.operator.parts
+
+    - match: '[0-9]+'
+      scope: constant.numeric.parts
+
+    - match: '[a-zA-Z_][a-zA-Z0-9_]*'
+      scope: variable.other.parts
+
+    - match: '[+\-*/;\[\](){}.:,|&><!#=-?]'
+      scope: keyword.operator.parts
+
+    - match: '\s+'
+      scope: whitespace.parts
+
+    - match: '.'
+      scope: invalid.illegal.character.parts
+
+  string_double:
+    - meta_scope: string.quoted.double.parts
+    - match: '\\"'
+      scope: constant.character.escape.parts
+    - match: '"'
+      scope: punctuation.definition.string.end.parts
+      pop: true
+    - match: '[^"]+'
+      scope: string.quoted.double.parts
