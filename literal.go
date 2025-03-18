@@ -21,6 +21,7 @@ const (
 	ParsedObjLiteral
 	ListLiteral
 	ParsedListLiteral
+	PointerLiteral
 )
 
 type Literal struct {
@@ -82,7 +83,7 @@ func (l *Literal) ToGoTypes(vm *VM) (any, error) {
 			tempVM := vm.copyVM()
 
 			for idx, param := range funcObj.GetArguments() {
-				vm.Enviroment.define(fmt.Sprintf("RT%s", string(param)), values[idx])
+				tempVM.Enviroment.define(fmt.Sprintf("RT%s", param), values[idx])
 			}
 
 			funcObj.Call(&tempVM)
@@ -102,7 +103,6 @@ func (l *Literal) ToGoTypes(vm *VM) (any, error) {
 			} else {
 				return nil, nil
 			}
-
 		}, nil
 	case ObjLiteral:
 		return nil, errors.New("use simplyfied ParsedObjLiteral")
@@ -138,6 +138,8 @@ func (l *Literal) ToGoTypes(vm *VM) (any, error) {
 		}
 
 		return entriesList, nil
+	case PointerLiteral:
+		return l.Value, nil
 	}
 
 	return nil, errors.New("invalid type to convert")
@@ -420,6 +422,8 @@ func (l *Literal) pretify() string {
 	case FunLiteral:
 		funcObj := l.Value.(PartsCallable)
 		return fmt.Sprintf("func(%s)", strings.Join(funcObj.GetArguments(), ","))
+	case PointerLiteral:
+		return fmt.Sprintf("<pointer>")
 	default:
 		panic(fmt.Errorf("Cant pretify that (%d)", l.LiteralType))
 	}
@@ -448,9 +452,11 @@ func LiteralFromGo(value any) (*Literal, error) {
 		return &Literal{ParsedListLiteral, ConvertListToParts(value.([]any))}, nil
 	case reflect.Map:
 		return &Literal{ParsedObjLiteral, &FFIMap[any, any]{value.(map[any]any)}}, nil
+	case reflect.Pointer:
+		return &Literal{PointerLiteral, value}, nil
+	case reflect.Struct:
+		return &Literal{PointerLiteral, value}, nil
 	}
-
-	//TODO types: Struct, (for references and no copies) Pointer
 
 	return nil, errors.New("value type not supported for conversion")
 }
@@ -489,7 +495,13 @@ func (ffi FFIFunction) Call(vm *VM) {
 			panic(err)
 		}
 
-		values[idx] = reflect.ValueOf(converted)
+		actualType := funcType.In(idx)
+
+		reflectNew := reflect.New(actualType).Elem()
+
+		reflectNew.Set(reflect.ValueOf(converted))
+
+		values[idx] = reflectNew
 	}
 
 	funcOut := funcVal.Call(values)
@@ -518,7 +530,7 @@ func (ffi FFIFunction) GetArguments() []string {
 	args := make([]string, numIn)
 
 	for i := 0; i < numIn; i++ {
-		args[i] = funcType.In(i).Name()
+		args[i] = fmt.Sprintf("val_%d", i)
 	}
 
 	return args

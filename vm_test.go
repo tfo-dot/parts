@@ -845,10 +845,10 @@ func TestStructWithMissingFieldsEmpty(t *testing.T) {
 	}
 
 	testStruct := TestStruct{
-		Id:   "no_id",
-		HP:   90,
-		SPD:  40,
-		ATK:  10,
+		Id:  "no_id",
+		HP:  90,
+		SPD: 40,
+		ATK: 10,
 	}
 
 	ReadFromParts(vm, &testStruct)
@@ -973,5 +973,69 @@ func TestFFIMap(t *testing.T) {
 
 	if testStruct.Res != 10 {
 		t.Errorf("function result didn't matched got (%d) expected (%d)", testStruct.Res, 10)
+	}
+}
+
+func TestPointer(t *testing.T) {
+	type Fight struct{ Turn int }
+	type Mob struct{ Id string }
+
+	type TestStruct struct {
+		Action func(...any) (any, error)
+	}
+
+	vm, err := GetVMWithSource(`fun Action(fight, mob) = getTurnFor(fight, getId(mob))`)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	vm.Enviroment.Append(&VMEnviroment{
+		Enclosing: nil,
+		Values: map[string]*Literal{
+			"RTgetTurnFor": {
+				FunLiteral,
+				FFIFunction{func(f *Fight, id string) int {
+					if id == "mob" {
+						return f.Turn
+					}
+
+					return -1
+				}},
+			},
+			"RTgetId": {
+				FunLiteral,
+				FFIFunction{func(m *Mob) string {
+					return m.Id
+				}},
+			},
+		},
+	})
+
+	err = vm.Run()
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var testStruct TestStruct
+
+	ReadFromParts(vm, &testStruct)
+
+	val, err := testStruct.Action(
+		Literal{PointerLiteral, &Fight{Turn: 2}},
+		Literal{PointerLiteral, &Mob{Id: "mob"}},
+	)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	if val != 2 {
+		t.Errorf("function result didn't matched got (%d) expected (%d)", val, 2)
+		return
 	}
 }

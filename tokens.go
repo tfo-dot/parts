@@ -70,7 +70,7 @@ var ScannerRules = []Rule{
 	{
 		Result: TokenKeyword,
 		BaseRule: func(r rune) bool {
-			return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
+			return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || r == '_'
 		},
 	},
 	{

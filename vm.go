@@ -194,6 +194,10 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 
 		key, err := HashLiteral(*rawKey.(*Literal))
 
+		if err != nil {
+			return UndefinedExpression, nil, errors.Join(errors.New("got error while hashing value"), err)
+		}
+
 		if has := accessor.Value.(PartsIndexable).HasByKey(key); has {
 			return TypeLiteral, accessor.Value.(PartsIndexable).GetByKey(key), nil
 		} else {
@@ -320,13 +324,6 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 			return UndefinedExpression, nil, fmt.Errorf("expected function value got %d", resolvedExpr.LiteralType)
 		}
 
-		newEnv := VMEnviroment{
-			Values:    make(map[string]*Literal),
-			Enclosing: vm.Enviroment,
-		}
-
-		vm.Enviroment = &newEnv
-
 		funcObj := resolvedExpr.Value.(PartsCallable)
 
 		values := make([]*Literal, vm.Code[vm.Idx])
@@ -346,13 +343,17 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 
 			resolvedExpr, err := vm.simplifyLiteral(expr.(*Literal), true)
 
+			if err != nil {
+				return UndefinedExpression, nil, errors.Join(errors.New("got error while simplyfing expression"), err)
+			}
+
 			values[i] = resolvedExpr
 		}
 
 		tempVM := vm.copyVM()
 
 		for idx, param := range funcObj.GetArguments() {
-			vm.Enviroment.define(fmt.Sprintf("RT%s", string(param)), values[idx])
+			tempVM.Enviroment.define(fmt.Sprintf("RT%s", string(param)), values[idx])
 		}
 
 		funcObj.Call(&tempVM)
@@ -527,6 +528,17 @@ const (
 )
 
 func (vm *VM) simplifyLiteral(literal *Literal, resolveRef bool) (*Literal, error) {
+
+	if literal.LiteralType == PointerLiteral {
+		val, valid := literal.Value.(Literal)
+
+		if valid {
+			return vm.simplifyLiteral(&val, resolveRef)
+		} else {
+			return literal, nil
+		}
+	}
+
 	if literal.LiteralType == RefLiteral && resolveRef {
 		if literal.Value.(ReferenceDeclaration).Dynamic {
 			return literal, nil
@@ -646,7 +658,6 @@ func (vm *VM) newVM(code []Bytecode) VM {
 }
 
 func (vm *VM) copyVM() VM {
-
 	env := VMEnviroment{
 		Enclosing: vm.Enviroment,
 		Values:    make(map[string]*Literal),
