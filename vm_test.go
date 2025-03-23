@@ -1039,3 +1039,20 @@ func TestPointer(t *testing.T) {
 		return
 	}
 }
+
+func TestTestChainedIfCondition(t *testing.T) {
+	vm, err := GetVMWithSource(`let turn = 3;
+		if ((turn == 2) == false) * ((turn == 1) == false) { printLn("ig") } else { printLn("nuh uh") }`)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	err = vm.Run()
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+}

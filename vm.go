@@ -107,9 +107,7 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 			return ScopeChange, nil, errors.New("leaving scope but already at top level")
 		}
 
-		oldEnv := vm.Enviroment.Enclosing
-
-		vm.Enviroment = oldEnv
+		vm.Enviroment = vm.Enviroment.Enclosing
 
 		return ScopeChange, nil, nil
 	case B_LITERAL:
@@ -273,6 +271,10 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 			return UndefinedExpression, nil, errors.Join(errors.New("got error while running variable value"), err)
 		}
 
+		if exprType != TypeLiteral {
+			return UndefinedExpression, nil, fmt.Errorf("expected value type got %d (running set)", exprType)
+		}
+
 		simpleValue, err := vm.simplifyLiteral(value.(*Literal), true)
 
 		if err != nil {
@@ -397,8 +399,6 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 			tempVM := vm.newVM(vm.Code[vm.Idx : vm.Idx+len])
 
 			vm.Idx += len
-
-			err = tempVM.Run()
 
 			if err = tempVM.Run(); err != nil {
 				return UndefinedExpression, nil, errors.Join(errors.New("got error while running then branch"), err)

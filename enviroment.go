@@ -32,7 +32,7 @@ func (env *VMEnviroment) resolve(key string) (*Literal, error) {
 		return env.Enclosing.resolve(key)
 	}
 
-	return nil, errors.New("undefined variable resolve")
+	return nil, fmt.Errorf("undefined variable resolve '%s'", key)
 }
 
 func (env *VMEnviroment) assign(key string, value *Literal) (*Literal, error) {
