@@ -11,6 +11,52 @@ type VMEnviroment struct {
 	Values map[string]*Literal
 }
 
+func (env *VMEnviroment) Define(key string, value *Literal) error {
+	key = fmt.Sprintf("RT%s", key)
+
+	_, exists := env.Values[key]
+
+	if exists {
+		return fmt.Errorf("redefining variable in the same scope ('%s')", key)
+	}
+
+	env.Values[key] = value
+
+	return nil
+}
+
+func (env *VMEnviroment) Resolve(key string) (*Literal, error) {
+	key = fmt.Sprintf("RT%s", key)
+
+	if value, exists := env.Values[key]; exists {
+		return value, nil
+	}
+
+	if env.Enclosing != nil {
+		return env.Enclosing.Resolve(key)
+	}
+
+	return nil, fmt.Errorf("undefined variable resolve '%s'", key)
+}
+
+func (env *VMEnviroment) DefineFunction(key string, val any) error {
+	return env.Define(key, &Literal{FunLiteral, val})
+}
+
+func (env *VMEnviroment) AppendValues(values map[string]any) error {
+	for key, rawVal := range values {
+		val, err := LiteralFromGo(rawVal)
+
+		if err != nil {
+			return errors.Join(fmt.Errorf("error converting value to parts at %s", key), err)
+		}
+
+		env.Define(key, val)
+	}
+
+	return nil
+}
+
 func (env *VMEnviroment) define(key string, value *Literal) (*Literal, error) {
 	_, exists := env.Values[key]
 

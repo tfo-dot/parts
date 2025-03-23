@@ -196,6 +196,18 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 			return UndefinedExpression, nil, errors.Join(errors.New("got error while hashing value"), err)
 		}
 
+		if _, is := accessor.Value.(PartsIndexable); !is {
+			//For some reason you can't cast FFIMap to PartsIndexable
+
+			if val, isFFIMap := accessor.Value.(FFIMap); isFFIMap {
+				if has := val.HasByKey(key); has {
+					return TypeLiteral, val.GetByKey(key), nil
+				} else {
+					return UndefinedExpression, nil, fmt.Errorf("key not found: %s", key)
+				}
+			}
+		}
+
 		if has := accessor.Value.(PartsIndexable).HasByKey(key); has {
 			return TypeLiteral, accessor.Value.(PartsIndexable).GetByKey(key), nil
 		} else {

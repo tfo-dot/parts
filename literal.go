@@ -451,7 +451,7 @@ func LiteralFromGo(value any) (*Literal, error) {
 	case reflect.Slice:
 		return &Literal{ParsedListLiteral, ConvertListToParts(value.([]any))}, nil
 	case reflect.Map:
-		return &Literal{ParsedObjLiteral, &FFIMap[any, any]{value.(map[any]any)}}, nil
+		return &Literal{ParsedObjLiteral, NewFFIMap(value)}, nil
 	case reflect.Pointer:
 		return &Literal{PointerLiteral, value}, nil
 	case reflect.Struct:
@@ -552,11 +552,11 @@ func ConvertListToParts(list []any) *PartsObject {
 	return &values
 }
 
-type FFIMap[K comparable, V any] struct {
-	Entries map[K]V
+type FFIMap struct {
+	Entries reflect.Value
 }
 
-func (ffi *FFIMap[K, V]) Get(key *Literal) *Literal {
+func (ffi *FFIMap) Get(key *Literal) *Literal {
 	hash, err := HashLiteral(*key)
 
 	if err != nil {
@@ -566,7 +566,7 @@ func (ffi *FFIMap[K, V]) Get(key *Literal) *Literal {
 	return ffi.GetByKey(hash)
 }
 
-func (ffi *FFIMap[K, V]) Set(key *Literal, value *Literal) *Literal {
+func (ffi *FFIMap) Set(key *Literal, value *Literal) *Literal {
 	hash, err := HashLiteral(*key)
 
 	if err != nil {
@@ -576,7 +576,7 @@ func (ffi *FFIMap[K, V]) Set(key *Literal, value *Literal) *Literal {
 	return ffi.SetByKey(hash, value)
 }
 
-func (ffi *FFIMap[K, V]) Has(key *Literal) bool {
+func (ffi *FFIMap) Has(key *Literal) bool {
 	hash, err := HashLiteral(*key)
 
 	if err != nil {
@@ -586,14 +586,19 @@ func (ffi *FFIMap[K, V]) Has(key *Literal) bool {
 	return ffi.HasByKey(hash)
 }
 
-func (ffi *FFIMap[K, V]) Length() int {
-	return len(ffi.Entries)
+func (ffi *FFIMap) Length() int {
+	return ffi.Entries.Len()
 }
 
-func (ffi *FFIMap[K, V]) GetAll() map[string]*Literal {
+func (ffi *FFIMap) GetAll() map[string]*Literal {
 	temp := make(map[string]*Literal)
 
-	for key, val := range ffi.Entries {
+	iter := ffi.Entries.MapRange()
+
+	for iter.Next() {
+		key := iter.Key()
+		val := iter.Value()
+
 		keyLit, err := LiteralFromGo(key)
 
 		if err != nil {
@@ -618,10 +623,10 @@ func (ffi *FFIMap[K, V]) GetAll() map[string]*Literal {
 	return temp
 }
 
-func (ffi *FFIMap[K, V]) GetByKey(key string) *Literal {
+func (ffi *FFIMap) GetByKey(key string) *Literal {
 	val := returnExpected(key)
 
-	lit, err := LiteralFromGo(ffi.Entries[val.(K)])
+	lit, err := LiteralFromGo(ffi.Entries.MapIndex(reflect.ValueOf(val)).Interface())
 
 	if err != nil {
 		panic(err)
@@ -630,7 +635,7 @@ func (ffi *FFIMap[K, V]) GetByKey(key string) *Literal {
 	return lit
 }
 
-func (ffi *FFIMap[K, V]) SetByKey(key string, value *Literal) *Literal {
+func (ffi *FFIMap) SetByKey(key string, value *Literal) *Literal {
 	val, err := value.ToGoTypes(nil)
 
 	keyParsed := returnExpected(key)
@@ -639,16 +644,15 @@ func (ffi *FFIMap[K, V]) SetByKey(key string, value *Literal) *Literal {
 		panic(err)
 	}
 
-	ffi.Entries[keyParsed.(K)] = val.(V)
+	ffi.Entries.SetMapIndex(reflect.ValueOf(keyParsed), reflect.ValueOf(val))
 
 	return value
 }
 
-func (ffi *FFIMap[K, V]) HasByKey(key string) bool {
+func (ffi *FFIMap) HasByKey(key string) bool {
 	keyParsed := returnExpected(key)
 
-	_, has := ffi.Entries[keyParsed.(K)]
-	return has
+	return ffi.Entries.MapIndex(reflect.ValueOf(keyParsed)).IsValid()
 }
 
 func returnExpected(key string) any {
@@ -699,4 +703,8 @@ func HashLiteral(literal Literal) (string, error) {
 	}
 
 	return "", errors.New("literal not hashable")
+}
+
+func NewFFIMap(val any) FFIMap {
+	return FFIMap{reflect.ValueOf(val)}
 }

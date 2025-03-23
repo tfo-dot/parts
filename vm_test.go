@@ -949,14 +949,10 @@ func TestFFIMap(t *testing.T) {
 		return
 	}
 
-	ffiMap := map[int]int{
-		0: 10,
-	}
-
 	vm.Enviroment.Append(&VMEnviroment{
 		Enclosing: nil,
 		Values: map[string]*Literal{
-			"RTffi": {ParsedObjLiteral, &FFIMap[int, int]{Entries: ffiMap}},
+			"RTffi": {ParsedObjLiteral, NewFFIMap(map[int]int{0: 10})},
 		},
 	})
 
