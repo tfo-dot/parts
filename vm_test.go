@@ -519,7 +519,7 @@ func TestFunctionCall(t *testing.T) {
 		Res int `parts:"res"`
 	}
 
-	vm, err := GetVMWithSource(`fun GetRes(obj) = obj.res
+	vm, err := GetVMWithSource(`let GetRes(obj) = obj.res
 		let math = |> res: 10 <|
 		let res = GetRes(math)`)
 
@@ -550,7 +550,7 @@ func TestIfFull(t *testing.T) {
 		Res int `parts:"res"`
 	}
 
-	vm, err := GetVMWithSource(`let res = if (true) {return 10} else {return 1}`)
+	vm, err := GetVMWithSource(`let res = if (true) { 10 } else { 1 }`)
 
 	if err != nil {
 		t.Error(err)
@@ -579,7 +579,7 @@ func TestIfFullCursed(t *testing.T) {
 		Res int `parts:"res"`
 	}
 
-	vm, err := GetVMWithSource(`let res = if true return 10 else return 1`)
+	vm, err := GetVMWithSource(`let res = if true 10 else 1`)
 
 	if err != nil {
 		t.Error(err)
@@ -608,7 +608,7 @@ func TestIfNoElse(t *testing.T) {
 		Res int `parts:"res"`
 	}
 
-	vm, err := GetVMWithSource(`let res = if (false) {return 10}`)
+	vm, err := GetVMWithSource(`let res = if (false) { 10 }`)
 
 	if err != nil {
 		t.Error(err)
@@ -863,7 +863,7 @@ func TestFFIFromParts(t *testing.T) {
 		Res func(...any) (any, error) `parts:"res"`
 	}
 
-	vm, err := GetVMWithSource(`let mult = 2;fun res() = (10 * mult)`)
+	vm, err := GetVMWithSource(`let mult = 2; let res() = (10 * mult)`)
 
 	if err != nil {
 		t.Error(err)
@@ -980,7 +980,7 @@ func TestPointer(t *testing.T) {
 		Action func(...any) (any, error)
 	}
 
-	vm, err := GetVMWithSource(`fun Action(fight, mob) = getTurnFor(fight, getId(mob))`)
+	vm, err := GetVMWithSource(`let Action(fight, mob) = getTurnFor(fight, getId(mob))`)
 
 	if err != nil {
 		t.Error(err)
@@ -1036,7 +1036,7 @@ func TestPointer(t *testing.T) {
 	}
 }
 
-func TestTestChainedIfCondition(t *testing.T) {
+func TestChainedIfCondition(t *testing.T) {
 	vm, err := GetVMWithSource(`let turn = 3;
 		if ((turn == 2) == false) * ((turn == 1) == false) { printLn("ig") } else { printLn("nuh uh") }`)
 
@@ -1050,5 +1050,179 @@ func TestTestChainedIfCondition(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 		return
+	}
+}
+
+func TestReturnEarlyExit(t *testing.T) {
+	type TestStruct struct {
+		IsValid func(...any) (any, error)
+	}
+
+	vm, err := GetVMWithSource(`
+		let IsValid(turn) {
+		  if (Modulo(turn, 4)) == 0 {
+			return 0
+		  }
+		  
+    	  return 1
+		}`)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	vm.Enviroment.DefineFunction("Modulo", func(num, div int) int {
+		return num % div
+	})
+
+	err = vm.Run()
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var testStruct TestStruct
+
+	ReadFromParts(vm, &testStruct)
+
+	expectedRes := func(num int) int {
+		if num%4 == 0 {
+			return 0
+		}
+
+		return 1
+	}
+
+	for i := 0; i < 12; i++ {
+		modRes, err := testStruct.IsValid(i)
+
+		if err != nil {
+			t.Error(err)
+			return
+		}
+
+		if modRes.(int) != expectedRes(i) {
+			t.Errorf("unexpected value at %d", i)
+			return
+		}
+	}
+}
+
+func TestBlockReturn(t *testing.T) {
+	type TestStruct struct {
+		IsValid func(...any) (any, error)
+	}
+
+	vm, err := GetVMWithSource(`
+		let IsValid(turn) {
+		  if (Modulo(turn, 4)) == 0 {
+			return 0
+		  }
+		  
+    	  1
+		}`)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	vm.Enviroment.DefineFunction("Modulo", func(num, div int) int {
+		return num % div
+	})
+
+	err = vm.Run()
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var testStruct TestStruct
+
+	ReadFromParts(vm, &testStruct)
+
+	expectedRes := func(num int) int {
+		if num%4 == 0 {
+			return 0
+		}
+
+		return 1
+	}
+
+	for i := 0; i < 12; i++ {
+		modRes, err := testStruct.IsValid(i)
+
+		if err != nil {
+			t.Error(err)
+			return
+		}
+
+		if modRes == nil {
+			t.Errorf("got nil at %d", i)
+			return
+		}
+
+		if modRes.(int) != expectedRes(i) {
+			t.Errorf("unexpected value at %d", i)
+			return
+		}
+	}
+}
+
+func TestFuncSimplified(t *testing.T) {
+	type TestStruct struct {
+		IsValid func(...any) (any, error)
+	}
+
+	vm, err := GetVMWithSource(`let IsValid(turn) = if (Modulo(turn, 4)) == 0 { 0 } else 1`)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	vm.Enviroment.DefineFunction("Modulo", func(num, div int) int {
+		return num % div
+	})
+
+	err = vm.Run()
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var testStruct TestStruct
+
+	ReadFromParts(vm, &testStruct)
+
+	expectedRes := func(num int) int {
+		if num%4 == 0 {
+			return 0
+		}
+
+		return 1
+	}
+
+	for i := 0; i < 12; i++ {
+		modRes, err := testStruct.IsValid(i)
+
+		if err != nil {
+			t.Error(err)
+			return
+		}
+
+		if modRes == nil {
+			t.Errorf("got nil at %d", i)
+			return
+		}
+
+		if modRes.(int) != expectedRes(i) {
+			t.Errorf("unexpected value at %d", i)
+			return
+		}
 	}
 }

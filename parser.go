@@ -79,20 +79,38 @@ func (p *Parser) parseTopLevel() ([]Bytecode, error) {
 			Value:       ReferenceDeclaration{Reference: string(identifierToken.Value), Dynamic: false},
 		})
 
-		if err != nil {
-			return []Bytecode{}, errors.Join(errors.New("got error while writing literal offset"), err)
-		}
-
 		initialValue := []Bytecode{}
 
-		if p.matchOperator("EQUALS") {
-			value, err := p.parseInScope(Expression)
+		if p.matchOperator("LEFT_PAREN") {
+			funDeclaration, err := p.parseFunction(true)
+
+			if err != nil {
+				return []Bytecode{}, errors.Join(errors.New(""), err)
+			}
+
+			idx, err := p.AppendLiteral(Literal{FunLiteral, funDeclaration})
+
+			if err != nil {
+				return []Bytecode{}, errors.Join(errors.New("encountered err in length encoding"), err)
+			}
+
+			initialValue = idx
+		} else {
+			if err != nil {
+				return []Bytecode{}, errors.Join(errors.New("got error while writing literal offset"), err)
+			}
+
+			if !p.matchOperator("EQUALS") {
+				return []Bytecode{}, errors.New("expected value after equals operator")
+			}
+
+			rawVal, err := p.parseInScope(Expression)
 
 			if err != nil {
 				return []Bytecode{}, errors.Join(errors.New("got error while parsing expression (resolving expression)"), err)
 			}
 
-			initialValue = value
+			initialValue = rawVal
 		}
 
 		return append(append([]Bytecode{B_DECLARE}, literalCode...), initialValue...), nil
@@ -131,93 +149,77 @@ func (p *Parser) parseTopLevel() ([]Bytecode, error) {
 	return p.parseExpression()
 }
 
-func (p *Parser) parseExpression() ([]Bytecode, error) {
-	if p.matchKeyword("FUN") {
-		functionName := []Bytecode{}
-		{
-			currentToken, err := p.peek()
-
-			if err != nil {
-				return []Bytecode{}, errors.Join(errors.New("got error while parsing identifier name"), err)
-			}
-
-			if currentToken.Type == TokenIdentifier {
-				functionNameToken, err := p.advance()
-
-				if err != nil {
-					return []Bytecode{}, errors.Join(errors.New("got error while parsing identifier name"), err)
-				}
-
-				functionName, err = p.AppendLiteral(Literal{
-					LiteralType: RefLiteral,
-					Value:       ReferenceDeclaration{Reference: string(functionNameToken.Value), Dynamic: false},
-				})
-
-				if err != nil {
-					return []Bytecode{}, errors.Join(errors.New("got error while encoding identifier literal"), err)
-				}
-			}
-		}
-
-		if !p.matchOperator("LEFT_PAREN") {
-			token, err := p.peek()
-
-			if err != nil {
-				return []Bytecode{}, errors.Join(errors.New("got error while reading function params"), err)
-			}
-
-			return []Bytecode{}, fmt.Errorf("expected '(' after function declaration got '%s'", string(token.Value))
-		}
-
+func (p *Parser) parseFunction(ignoreLeftParen bool) (FunctionDeclaration, error) {
+	if !p.matchOperator("LEFT_PAREN") && !ignoreLeftParen {
 		token, err := p.peek()
 
 		if err != nil {
-			return []Bytecode{}, errors.Join(errors.New("got error while reading function params"), err)
+			return FunctionDeclaration{}, errors.Join(errors.New("got error while reading function params"), err)
 		}
 
-		declaration := FunctionDeclaration{
-			Params: []string{},
-			Body:   []Bytecode{},
+		return FunctionDeclaration{}, fmt.Errorf("expected '(' after function declaration got '%s'", string(token.Value))
+	}
+
+	token, err := p.peek()
+
+	if err != nil {
+		return FunctionDeclaration{}, errors.Join(errors.New("got error while reading function params"), err)
+	}
+
+	declaration := FunctionDeclaration{
+		Params: []string{},
+		Body:   []Bytecode{},
+	}
+
+	if token.Type != TokenOperator && string(token.Value) != "RIGHT_PAREN" {
+		for cond := true; cond; cond = p.matchOperator("COMMA") {
+			identifierToken, err := p.advance()
+
+			if identifierToken.Type != TokenIdentifier {
+				return FunctionDeclaration{}, errors.Join(errors.New("encountered unexpected token in function params"), err)
+			}
+
+			declaration.Params = append(declaration.Params, string(identifierToken.Value))
+		}
+	}
+
+	if !p.matchOperator("RIGHT_PAREN") {
+		token, err := p.peek()
+
+		if err != nil {
+			return FunctionDeclaration{}, errors.Join(errors.New("got error while reading function params"), err)
 		}
 
-		if token.Type != TokenOperator && string(token.Value) != "RIGHT_PAREN" {
-			for cond := true; cond; cond = p.matchOperator("COMMA") {
-				identifierToken, err := p.advance()
+		return FunctionDeclaration{}, fmt.Errorf("expected ')' after function params got '%s'", string(token.Value))
+	}
 
-				if identifierToken.Type != TokenIdentifier {
-					return []Bytecode{}, errors.Join(errors.New("encountered unexpected token in function params"), err)
-				}
+	if p.matchOperator("EQUALS") {
+		expr, err := p.parseExpression()
 
-				declaration.Params = append(declaration.Params, string(identifierToken.Value))
-			}
+		if err != nil {
+			return FunctionDeclaration{}, errors.Join(errors.New("encountered err in function body"), err)
 		}
 
-		if !p.matchOperator("RIGHT_PAREN") {
-			token, err := p.peek()
+		declaration.Body = append(append(declaration.Body, B_RETURN), expr...)
+	} else {
+		body, err := p.parseBlock(true)
 
-			if err != nil {
-				return []Bytecode{}, errors.Join(errors.New("got error while reading function params"), err)
-			}
-
-			return []Bytecode{}, fmt.Errorf("expected ')' after function params got '%s'", string(token.Value))
+		if err != nil {
+			return FunctionDeclaration{}, errors.Join(errors.New("encountered err in function body"), err)
 		}
 
-		if p.matchOperator("EQUALS") {
-			expr, err := p.parseExpression()
+		declaration.Body = body
+	}
 
-			if err != nil {
-				return []Bytecode{}, errors.Join(errors.New("encountered err in function body"), err)
-			}
+	return declaration, nil
+}
 
-			declaration.Body = append(append(declaration.Body, B_RETURN), expr...)
-		} else {
-			body, err := p.parseBlock(true)
+func (p *Parser) parseExpression() ([]Bytecode, error) {
+	if p.matchKeyword("FUN") {
+		declaration, err := p.parseFunction(false)
 
-			if err != nil {
-				return []Bytecode{}, errors.Join(errors.New("encountered err in function body"), err)
-			}
-
-			declaration.Body = body
+		if err != nil {
+			return []Bytecode{}, errors.Join(errors.New("encountered err in length encoding"), err)
 		}
 
 		idx, err := p.AppendLiteral(Literal{FunLiteral, declaration})
@@ -226,11 +228,7 @@ func (p *Parser) parseExpression() ([]Bytecode, error) {
 			return []Bytecode{}, errors.Join(errors.New("encountered err in length encoding"), err)
 		}
 
-		if len(functionName) == 0 {
-			return idx, nil
-		} else {
-			return append(append([]Bytecode{B_DECLARE}, functionName...), idx...), nil
-		}
+		return idx, nil
 	}
 
 	if p.matchKeyword("IF") {

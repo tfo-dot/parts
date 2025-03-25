@@ -130,7 +130,7 @@ func TestAnonymousFunctionWithBody(t *testing.T) {
 }
 
 func TestNamedFunctionNoBody(t *testing.T) {
-	parser := GetParserWithSource("fun x() {}")
+	parser := GetParserWithSource("let x() {}")
 
 	bytecode, err := parser.parse()
 
@@ -143,7 +143,7 @@ func TestNamedFunctionNoBody(t *testing.T) {
 }
 
 func TestNamedFunctionWithBody(t *testing.T) {
-	parser := GetParserWithSource("fun x() { 0 }")
+	parser := GetParserWithSource("let x() { 0 }")
 
 	bytecode, err := parser.parse()
 
@@ -164,7 +164,7 @@ func TestNamedFunctionWithBody(t *testing.T) {
 }
 
 func TestNamedFunctionWithArg(t *testing.T) {
-	parser := GetParserWithSource("fun x(one) { }")
+	parser := GetParserWithSource("let x(one) { }")
 
 	bytecode, err := parser.parse()
 
@@ -195,7 +195,7 @@ func TestNamedFunctionWithArg(t *testing.T) {
 }
 
 func TestNamedFunctionWithTwoArg(t *testing.T) {
-	parser := GetParserWithSource("fun x(one, two) { }")
+	parser := GetParserWithSource("let x(one, two) { }")
 
 	bytecode, err := parser.parse()
 
@@ -231,7 +231,7 @@ func TestNamedFunctionWithTwoArg(t *testing.T) {
 }
 
 func TestNamedFunctionInline(t *testing.T) {
-	parser := GetParserWithSource("fun x(one) = one")
+	parser := GetParserWithSource("let x(one) = one")
 
 	bytecode, err := parser.parse()
 
@@ -1117,7 +1117,7 @@ func TestOpEq(t *testing.T) {
 }
 
 func TestSomeParsing(t *testing.T) {
-	parser := GetParserWithSource("let mult = 2;fun res() = (10 * mult)")
+	parser := GetParserWithSource("let mult = 2; let res() = (10 * mult)")
 	bytecode, err := parser.parseAll()
 
 	if err != nil {

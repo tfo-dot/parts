@@ -11,6 +11,8 @@ type VM struct {
 	Idx int
 
 	ReturnValue *Literal
+	EarlyExit   bool
+	LastExpr    *Literal
 
 	//Filled from parser
 	Code     []Bytecode
@@ -116,8 +118,10 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 		nameIdx, err := vm.decodeLen()
 
 		if err != nil {
-			return TypeLiteral, nil, errors.Join(errors.New("got error while decoding offset"), err)
+			return UndefinedExpression, nil, errors.Join(errors.New("got error while decoding offset"), err)
 		}
+
+		vm.LastExpr = vm.Literals[nameIdx]
 
 		return TypeLiteral, vm.Literals[nameIdx], nil
 	case B_DOT:
@@ -172,7 +176,6 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 		}
 
 		if !unwindDot {
-
 			resVal := make([]*Literal, 0)
 
 			if val, ok := rawAccessor.([]*Literal); ok {
@@ -201,7 +204,9 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 
 			if val, isFFIMap := accessor.Value.(FFIMap); isFFIMap {
 				if has := val.HasByKey(key); has {
-					return TypeLiteral, val.GetByKey(key), nil
+					rVal := val.GetByKey(key)
+					vm.LastExpr = rVal
+					return TypeLiteral, rVal, nil
 				} else {
 					return UndefinedExpression, nil, fmt.Errorf("key not found: %s", key)
 				}
@@ -209,7 +214,9 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 		}
 
 		if has := accessor.Value.(PartsIndexable).HasByKey(key); has {
-			return TypeLiteral, accessor.Value.(PartsIndexable).GetByKey(key), nil
+			rVal := accessor.Value.(PartsIndexable).GetByKey(key)
+			vm.LastExpr = rVal
+			return TypeLiteral, rVal, nil
 		} else {
 			return UndefinedExpression, nil, fmt.Errorf("key not found: %s", key)
 		}
@@ -226,6 +233,7 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 		}
 
 		if exprType == DotExpression && unwindDot {
+			vm.LastExpr = expr.(*Literal)
 			return DotExpression, expr, nil
 		}
 
@@ -234,6 +242,8 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 		if err != nil {
 			return UndefinedExpression, nil, errors.Join(errors.New("got error while running expression"), err)
 		}
+
+		vm.LastExpr = resolvedExpr
 
 		return TypeLiteral, resolvedExpr, nil
 	case B_SET:
@@ -268,6 +278,8 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 				return UndefinedExpression, nil, errors.Join(errors.New("got error while assigning to a variable"), err)
 			}
 
+			vm.LastExpr = val
+
 			return TypeLiteral, val, nil
 		}
 
@@ -299,6 +311,8 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 			return UndefinedExpression, nil, errors.Join(errors.New("got error while assigning to a variable"), err)
 		}
 
+		vm.LastExpr = simpleValue
+
 		return TypeLiteral, simpleValue, nil
 	case B_RETURN:
 		vm.Idx++
@@ -314,6 +328,8 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 		}
 
 		vm.ReturnValue = val.(*Literal)
+
+		vm.EarlyExit = true
 
 		return NoValue, nil, err
 	case B_CALL:
@@ -370,17 +386,36 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 			tempVM.Enviroment.define(fmt.Sprintf("RT%s", string(param)), values[idx])
 		}
 
-		funcObj.Call(&tempVM)
-
-		if err = tempVM.Run(); err != nil {
+		if err = funcObj.Call(&tempVM); err != nil {
 			return UndefinedExpression, nil, errors.Join(errors.New("got error while running function body"), err)
 		}
 
-		if tempVM.ReturnValue != nil {
-			return TypeLiteral, tempVM.ReturnValue, nil
-		} else {
-			return NoValue, nil, nil
+		if tempVM.EarlyExit {
+			if tempVM.ReturnValue == nil {
+				if tempVM.LastExpr != nil {
+					vm.LastExpr = tempVM.LastExpr
+					return TypeLiteral, tempVM.LastExpr, nil
+				} else {
+					return NoValue, nil, nil
+				}
+
+			} else {
+				vm.LastExpr = tempVM.ReturnValue
+				return TypeLiteral, tempVM.ReturnValue, nil
+			}
 		}
+
+		if tempVM.ReturnValue != nil {
+			vm.LastExpr = tempVM.ReturnValue
+			return TypeLiteral, tempVM.ReturnValue, nil
+		}
+
+		if tempVM.LastExpr != nil {
+			vm.LastExpr = tempVM.LastExpr
+			return TypeLiteral, tempVM.LastExpr, nil
+		}
+
+		return NoValue, nil, nil
 	case B_COND_JUMP:
 		vm.Idx++
 		exprType, jumpVal, err := vm.runExpr(true)
@@ -402,65 +437,101 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 		conditionTrue := lit.Value.(bool)
 
 		if conditionTrue {
-			len, err := vm.decodeLen()
+			length, err := vm.decodeLen()
 
 			if err != nil {
 				return UndefinedExpression, nil, fmt.Errorf("got error while decoding length %d (then branch)", lit.LiteralType)
 			}
 
-			tempVM := vm.newVM(vm.Code[vm.Idx : vm.Idx+len])
+			tempVM := vm.newVM(vm.Code[vm.Idx : vm.Idx+length])
 
-			vm.Idx += len
+			vm.Idx += length
 
 			if err = tempVM.Run(); err != nil {
 				return UndefinedExpression, nil, errors.Join(errors.New("got error while running then branch"), err)
 			}
 
-			len, err = vm.decodeLen()
+			if tempVM.EarlyExit {
+				vm.Idx = len(vm.Code)
+
+				vm.EarlyExit = true
+				vm.ReturnValue = tempVM.ReturnValue
+
+				if tempVM.ReturnValue == nil {
+					vm.LastExpr = nil
+					return NoValue, nil, nil
+				} else {
+					vm.LastExpr = tempVM.ReturnValue
+					return TypeLiteral, tempVM.ReturnValue, nil
+				}
+			}
+
+			length, err = vm.decodeLen()
 
 			if err != nil {
 				return UndefinedExpression, nil, fmt.Errorf("got error while decoding length %d (else branch)", lit.LiteralType)
 			}
 
-			vm.Idx += len + 1
+			vm.Idx += length + 1
 
 			if tempVM.ReturnValue == nil {
+				if tempVM.LastExpr != nil {
+					vm.LastExpr = tempVM.LastExpr
+					return TypeLiteral, tempVM.LastExpr, nil
+				}
+
+				vm.LastExpr = nil
 				return NoValue, nil, nil
 			} else {
+				vm.LastExpr = tempVM.ReturnValue
 				return TypeLiteral, tempVM.ReturnValue, nil
 			}
 		} else {
-			len, err := vm.decodeLen()
+			length, err := vm.decodeLen()
 
 			if err != nil {
 				return UndefinedExpression, nil, fmt.Errorf("got error while decoding length %d (then branch)", lit.LiteralType)
 			}
 
-			vm.Idx += len
+			vm.Idx += length
 
-			len, err = vm.decodeLen()
+			length, err = vm.decodeLen()
 
 			if err != nil {
 				return UndefinedExpression, nil, fmt.Errorf("got error while decoding length %d (else branch)", lit.LiteralType)
 			}
 
-			if len == 0 {
+			if length == 0 {
 				//No else branch just exit
 				return NoValue, nil, nil
 			} else {
-				tempVM := vm.newVM(vm.Code[vm.Idx : vm.Idx+len])
+				tempVM := vm.newVM(vm.Code[vm.Idx : vm.Idx+length])
 
-				vm.Idx += len
+				vm.Idx += length
 
 				if err := tempVM.Run(); err != nil {
 					return UndefinedExpression, nil, errors.Join(errors.New("got error while running then branch"), err)
 				}
 
-				if tempVM.ReturnValue == nil {
-					return NoValue, nil, nil
-				} else {
-					return TypeLiteral, tempVM.ReturnValue, nil
+				if tempVM.EarlyExit {
+					vm.Idx = len(vm.Code)
+					vm.EarlyExit = true
+					vm.ReturnValue = tempVM.ReturnValue
 				}
+
+				if tempVM.ReturnValue == nil {
+					if tempVM.LastExpr != nil {
+						vm.LastExpr = tempVM.LastExpr
+						return TypeLiteral, tempVM.LastExpr, nil
+					}
+
+					vm.LastExpr = nil
+					return NoValue, nil, nil
+				}
+
+				vm.LastExpr = tempVM.ReturnValue
+
+				return TypeLiteral, tempVM.ReturnValue, nil
 			}
 		}
 	case B_OP_ADD, B_OP_MIN, B_OP_MUL, B_OP_DIV, B_OP_EQ:
@@ -469,6 +540,8 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 		if err != nil {
 			return UndefinedExpression, nil, errors.Join(errors.New("got error while running operation"), err)
 		}
+
+		vm.LastExpr = rVal
 
 		return TypeLiteral, rVal, nil
 	default:
@@ -679,6 +752,7 @@ func (vm *VM) copyVM() VM {
 		Enviroment:  &env,
 		Idx:         0,
 		ReturnValue: nil,
+		EarlyExit:   false,
 		Code:        []Bytecode{},
 		Literals:    vm.Literals,
 		Meta:        vm.Meta,
@@ -686,16 +760,18 @@ func (vm *VM) copyVM() VM {
 }
 
 type PartsCallable interface {
-	Call(vm *VM)
+	Call(vm *VM) error
 	GetArguments() []string
 }
 
-func (f FunctionDeclaration) Call(vm *VM) {
+func (f FunctionDeclaration) Call(vm *VM) error {
 	vm.Code = f.Body
 
 	if err := vm.Run(); err != nil {
-		panic(err)
+		return err
 	}
+
+	return nil
 }
 
 func (f FunctionDeclaration) GetArguments() []string {

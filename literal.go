@@ -86,23 +86,34 @@ func (l *Literal) ToGoTypes(vm *VM) (any, error) {
 				tempVM.Enviroment.define(fmt.Sprintf("RT%s", param), values[idx])
 			}
 
-			funcObj.Call(&tempVM)
+			err := funcObj.Call(&tempVM)
 
-			if err := tempVM.Run(); err != nil {
-				return nil, errors.Join(errors.New("got error while running function body"), err)
+			if err != nil {
+				return nil, errors.Join(errors.New("got error while calling function in parts"), err)
 			}
 
-			if tempVM.ReturnValue != nil {
-				converted, err := tempVM.ReturnValue.ToGoTypes(&tempVM)
+			if tempVM.ReturnValue == nil {
+				if tempVM.LastExpr != nil {
+					converted, err := tempVM.LastExpr.ToGoTypes(&tempVM)
 
-				if err != nil {
-					return nil, errors.Join(errors.New("got error while converting from parts value to go"), err)
+					if err != nil {
+						return nil, errors.Join(errors.New("got error while converting from parts value to go"), err)
+					}
+
+					return converted, nil
+				} else {
+					return nil, nil
+
 				}
-
-				return converted, nil
-			} else {
-				return nil, nil
 			}
+
+			converted, err := tempVM.ReturnValue.ToGoTypes(&tempVM)
+
+			if err != nil {
+				return nil, errors.Join(errors.New("got error while converting from parts value to go"), err)
+			}
+
+			return converted, nil
 		}, nil
 	case ObjLiteral:
 		return nil, errors.New("use simplyfied ParsedObjLiteral")
@@ -209,7 +220,7 @@ func (l *Literal) opAdd(other *Literal) (*Literal, error) {
 		case FunLiteral, ObjLiteral, ListLiteral, ParsedListLiteral, ParsedObjLiteral:
 			return nil, fmt.Errorf("operation not supported - add (string, %d)", other.LiteralType)
 		}
-	case ListLiteral:
+	case ListLiteral, ParsedListLiteral:
 		l.Value.(PartsIndexable).SetByKey(fmt.Sprintf("IT%d", l.Value.(PartsIndexable).Length()), other)
 
 		return l, nil
@@ -465,7 +476,7 @@ type FFIFunction struct {
 	Function any
 }
 
-func (ffi FFIFunction) Call(vm *VM) {
+func (ffi FFIFunction) Call(vm *VM) error {
 	funcVal := reflect.ValueOf(ffi.Function)
 	funcType := funcVal.Type()
 
@@ -486,13 +497,13 @@ func (ffi FFIFunction) Call(vm *VM) {
 		val, err := vm.Enviroment.resolve(fmt.Sprintf("RT%s", key))
 
 		if err != nil {
-			panic(err)
+			return err
 		}
 
 		converted, err := val.ToGoTypes(vm)
 
 		if err != nil {
-			panic(err)
+			return err
 		}
 
 		actualType := funcType.In(idx)
@@ -506,16 +517,18 @@ func (ffi FFIFunction) Call(vm *VM) {
 
 	funcOut := funcVal.Call(values)
 
-	if resCount == 1 {
-		resConverted, err := LiteralFromGo(funcOut[0].Interface())
-
-		if err != nil {
-			panic(err)
-		}
-
-		vm.ReturnValue = resConverted
+	if len(funcOut) == 0 {
+		return nil
 	}
 
+	resConverted, err := LiteralFromGo(funcOut[0].Interface())
+
+	if err != nil {
+		return err
+	}
+
+	vm.ReturnValue = resConverted
+	return nil
 }
 
 func (ffi FFIFunction) GetArguments() []string {

@@ -40,7 +40,7 @@ func (env *VMEnviroment) Resolve(key string) (*Literal, error) {
 }
 
 func (env *VMEnviroment) DefineFunction(key string, val any) error {
-	return env.Define(key, &Literal{FunLiteral, val})
+	return env.Define(key, &Literal{FunLiteral, FFIFunction{val}})
 }
 
 func (env *VMEnviroment) AppendValues(values map[string]any) error {
