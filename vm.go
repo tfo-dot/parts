@@ -11,8 +11,8 @@ type VM struct {
 	Idx int
 
 	ReturnValue *Literal
-	EarlyExit   bool
 	LastExpr    *Literal
+	EarlyExit   bool
 
 	//Filled from parser
 	Code     []Bytecode

@@ -1226,3 +1226,78 @@ func TestFuncSimplified(t *testing.T) {
 		}
 	}
 }
+
+func TestMapHelper(t *testing.T) {
+	type TestStruct struct {
+		Stats map[int]int `parts:"stats"`
+	}
+
+	vm, err := GetVMWithSource("let stats = |> 0: 10, 1: 35 <|")
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	err = vm.Run()
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var testStruct TestStruct
+
+	ReadFromParts(vm, &testStruct)
+
+	if testStruct.Stats[0] != 10 {
+		t.Errorf("map value didn't matched got (%d) expected (%d)", testStruct.Stats[0], 10)
+		return
+	}
+
+	if testStruct.Stats[1] != 35 {
+		t.Errorf("map value didn't matched got (%d) expected (%d)", testStruct.Stats[0], 35)
+		return
+	}
+}
+
+func TestMapHelperAlias(t *testing.T) {
+	type StatsEnum int
+
+	const (
+		Stat_HP  StatsEnum = iota
+		Stat_ATK StatsEnum = iota
+	)
+
+	type TestStruct struct {
+		Stats map[StatsEnum]int `parts:"stats"`
+	}
+
+	vm, err := GetVMWithSource("let stats = |> 0: 10, 1: 35 <|")
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	err = vm.Run()
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var testStruct TestStruct
+
+	ReadFromParts(vm, &testStruct)
+
+	if testStruct.Stats[Stat_HP] != 10 {
+		t.Errorf("map value didn't matched got (%d) expected (%d)", testStruct.Stats[Stat_HP], 10)
+		return
+	}
+
+	if testStruct.Stats[Stat_ATK] != 35 {
+		t.Errorf("map value didn't matched got (%d) expected (%d)", testStruct.Stats[Stat_ATK], 35)
+		return
+	}
+}

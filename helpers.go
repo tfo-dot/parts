@@ -119,9 +119,7 @@ func ReadFromParts[T any](vm *VM, out *T) {
 
 func FillField[T any](fieldIdx int, vm *VM, out *T) {
 	outStruct := reflect.TypeOf(*out)
-
 	field := outStruct.Field(fieldIdx)
-
 	fieldValue := reflect.ValueOf(out).Elem().Field(fieldIdx)
 
 	if !fieldValue.CanSet() {
@@ -174,15 +172,15 @@ func FillField[T any](fieldIdx int, vm *VM, out *T) {
 
 	switch field.Type.Kind() {
 	case reflect.Bool:
-		fieldValue.SetBool(val.(bool))
+		fieldValue.Set(reflect.ValueOf(val.(bool)).Convert(field.Type))
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		fieldValue.SetInt(int64(val.(int)))
+		fieldValue.Set(reflect.ValueOf(val.(int)).Convert(field.Type))
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		fieldValue.SetUint(uint64(val.(int)))
+		fieldValue.Set(reflect.ValueOf(val.(int)).Convert(field.Type))
 	case reflect.Float32, reflect.Float64:
-		fieldValue.SetFloat(val.(float64))
+		fieldValue.Set(reflect.ValueOf(val.(float64)).Convert(field.Type))
 	case reflect.String:
-		fieldValue.SetString(val.(string))
+		fieldValue.Set(reflect.ValueOf(val.(string)).Convert(field.Type))
 	case reflect.Slice:
 		if rawVal.LiteralType == ParsedListLiteral {
 			FillSlice(fieldIdx, val.([]any), vm, out)
@@ -190,13 +188,37 @@ func FillField[T any](fieldIdx int, vm *VM, out *T) {
 			panic(errors.New("trying to assign element as list"))
 		}
 	case reflect.Struct:
-		if rawVal.LiteralType == ParsedObjLiteral {
-			FillStruct(val.(map[string]any), vm, fieldValue.Addr().Interface())
-		} else {
+		if rawVal.LiteralType != ParsedObjLiteral {
 			panic(errors.New("wrong variable type"))
 		}
+
+		FillStruct(val.(map[string]any), vm, fieldValue.Addr().Interface())
 	case reflect.Func:
 		fieldValue.Set(reflect.ValueOf(val))
+	case reflect.Map:
+		if rawVal.LiteralType != ParsedObjLiteral {
+			panic(errors.New("wrong variable type"))
+		}
+
+		obj := rawVal.Value.(PartsIndexable).GetAll()
+
+		newMap := reflect.MakeMap(field.Type)
+
+		for rawKey, rawVal := range obj {
+			key := reflect.ValueOf(returnExpected(rawKey)).Convert(field.Type.Key())
+
+			val, err := rawVal.ToGoTypes(vm)
+
+			if err != nil {
+				panic(err)
+			}
+
+			reflectVal := reflect.ValueOf(val).Convert(field.Type.Elem())
+
+			newMap.SetMapIndex(key, reflectVal)
+		}
+
+		fieldValue.Set(newMap)
 	default:
 		fmt.Printf("%s type not supported - ignoring\n", field.Type.Kind().String())
 	}
@@ -231,15 +253,15 @@ func FillStruct[T any](data map[string]any, vm *VM, out T) {
 
 			switch field.Type.Kind() {
 			case reflect.Bool:
-				fieldValue.SetBool(val.(bool))
+				fieldValue.Set(reflect.ValueOf(val.(bool)).Convert(field.Type))
 			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-				fieldValue.SetInt(int64(val.(int)))
+				fieldValue.Set(reflect.ValueOf(val.(int)).Convert(field.Type))
 			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-				fieldValue.SetUint(uint64(val.(int)))
+				fieldValue.Set(reflect.ValueOf(val.(int)).Convert(field.Type))
 			case reflect.Float32, reflect.Float64:
-				fieldValue.SetFloat(val.(float64))
+				fieldValue.Set(reflect.ValueOf(val.(float64)).Convert(field.Type))
 			case reflect.String:
-				fieldValue.SetString(val.(string))
+				fieldValue.Set(reflect.ValueOf(val.(string)).Convert(field.Type))
 			case reflect.Slice:
 				if val, ok := val.([]any); ok {
 					FillSlice(i, val, vm, out)
@@ -255,6 +277,19 @@ func FillStruct[T any](data map[string]any, vm *VM, out T) {
 				}
 			case reflect.Func:
 				fieldValue.Set(reflect.ValueOf(val))
+			case reflect.Map:
+
+				newMap := reflect.MakeMap(field.Type)
+
+				for rawKey, val := range val.(map[string]any) {
+					key := reflect.ValueOf(returnExpected(rawKey)).Convert(field.Type.Key())
+
+					reflectVal := reflect.ValueOf(val).Convert(field.Type.Elem())
+
+					newMap.SetMapIndex(key, reflectVal)
+				}
+
+				fieldValue.Set(newMap)
 			default:
 				fmt.Printf("%s type not supported - ignoring\n", field.Type.Kind().String())
 			}
@@ -300,7 +335,7 @@ func FillSlice[T any](fieldIdx int, data []any, vm *VM, out T) {
 	newSlice := reflect.MakeSlice(fieldValue.Type(), 0, len(data))
 
 	for i := 0; i < len(data); i++ {
-		newSlice = reflect.Append(newSlice, reflect.ValueOf(data[i]))
+		newSlice = reflect.Append(newSlice, reflect.ValueOf(data[i]).Convert(fieldValue.Type().Elem()))
 	}
 
 	fieldValue.Set(newSlice)
