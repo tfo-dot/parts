@@ -735,7 +735,7 @@ type ListDefinition struct {
 func (p *Parser) AppendLiteral(literal Literal) ([]Bytecode, error) {
 	existingIdx := -1
 
-	if literal.LiteralType != ObjLiteral && literal.LiteralType != ListLiteral {
+	if literal.LiteralType != ObjLiteral && literal.LiteralType != ListLiteral && literal.LiteralType != FunLiteral {
 		for idx, existingLiteral := range p.Literals {
 			if existingLiteral.LiteralType != literal.LiteralType {
 				continue
