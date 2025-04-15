@@ -293,12 +293,6 @@ func (p *Parser) parseExpression() ([]Bytecode, error) {
 	rVal, rErr := p.parsePrimary()
 
 	if rErr != nil {
-		_, err := p.peek()
-
-		if err != nil {
-			panic(err)
-		}
-
 		return []Bytecode{}, errors.Join(errors.New("got error while parsing primary expression"), rErr)
 	}
 

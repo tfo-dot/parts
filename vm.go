@@ -691,13 +691,21 @@ func (vm *VM) simplifyLiteral(literal *Literal, resolveRef bool) (*Literal, erro
 
 			tempVM := vm.newVM(entry)
 
-			_, resolvedValue, err := tempVM.runExpr(true)
+			exprType, resolvedValue, err := tempVM.runExpr(true)
 
 			if err != nil {
 				return nil, errors.Join(errors.New("got error while parsing array element"), err)
 			}
 
+			if exprType != TypeLiteral {
+				return nil, errors.Join(fmt.Errorf("expected value got %d", exprType), err)
+			}
+
 			simplifiedValue, err := vm.simplifyLiteral(resolvedValue.(*Literal), true)
+
+			if err != nil {
+				return nil, errors.Join(errors.New("got error while parsing array element"), err)
+			}
 
 			objectData.Entries[entryKey] = simplifiedValue
 		}

@@ -1265,8 +1265,8 @@ func TestMapHelperAlias(t *testing.T) {
 	type StatsEnum int
 
 	const (
-		Stat_HP  StatsEnum = iota
-		Stat_ATK StatsEnum = iota
+		Stat_HP StatsEnum = iota
+		Stat_ATK
 	)
 
 	type TestStruct struct {
@@ -1298,6 +1298,52 @@ func TestMapHelperAlias(t *testing.T) {
 
 	if testStruct.Stats[Stat_ATK] != 35 {
 		t.Errorf("map value didn't matched got (%d) expected (%d)", testStruct.Stats[Stat_ATK], 35)
+		return
+	}
+}
+
+func TestNestedObject(t *testing.T) {
+	type StatsEnum int
+
+	const (
+		Stat_HP StatsEnum = iota
+		Stat_ATK
+	)
+
+	type TestStruct struct {
+		Stats struct {
+			Trigger struct {
+				Type StatsEnum
+			}
+			Key int
+		} `parts:"stats"`
+	}
+
+	vm, err := GetVMWithSource("let stats = |> Trigger: |> Type: 0 <|, Key: 35 <|")
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	err = vm.Run()
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var testStruct TestStruct
+
+	ReadFromParts(vm, &testStruct)
+
+	if testStruct.Stats.Trigger.Type != Stat_HP {
+		t.Errorf("field value didn't matched got (%d) expected (%d)", testStruct.Stats.Trigger.Type, Stat_HP)
+		return
+	}
+
+	if testStruct.Stats.Key != 35 {
+		t.Errorf("field value didn't matched got (%d) expected (%d)", testStruct.Stats.Key, 35)
 		return
 	}
 }

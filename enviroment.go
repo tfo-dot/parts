@@ -26,9 +26,7 @@ func (env *VMEnviroment) Define(key string, value *Literal) error {
 }
 
 func (env *VMEnviroment) Resolve(key string) (*Literal, error) {
-	key = fmt.Sprintf("RT%s", key)
-
-	if value, exists := env.Values[key]; exists {
+	if value, exists := env.Values[fmt.Sprintf("RT%s", key)]; exists {
 		return value, nil
 	}
 
