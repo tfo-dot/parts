@@ -369,7 +369,7 @@ func TestObjectWithIntEntry(t *testing.T) {
 func TestMeta(t *testing.T) {
 	parser := GetParserWithSource("#>\"random\": \"value\"")
 
-	bytecode, err := parser.parse()
+	bytecode, err := parser.parseAll()
 
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)

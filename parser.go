@@ -63,6 +63,18 @@ func (p *Parser) parse() ([]Bytecode, error) {
 }
 
 func (p *Parser) parseTopLevel() ([]Bytecode, error) {
+	if p.matchKeyword("SYNTAX") {
+		if !p.matchOperator("LEFT_BRACE") {
+			return []Bytecode{}, errors.New("opening brace not found")
+		}
+
+		if !p.matchOperator("RIGHT_BRACE") {
+			return []Bytecode{}, errors.New("closing brace not found")
+		}
+
+		return []Bytecode{B_RULE_CHANGE}, nil
+	}
+
 	if p.matchKeyword("LET") {
 		identifierToken, err := p.advance()
 
@@ -131,7 +143,7 @@ func (p *Parser) parseTopLevel() ([]Bytecode, error) {
 			return []Bytecode{}, errors.New("missing ':' after meta key")
 		}
 
-		metaValueToken, err := p.peek()
+		metaValueToken, err := p.advance()
 
 		if err != nil {
 			return []Bytecode{}, errors.Join(errors.New("got error while reading meta value"), err)
@@ -712,6 +724,7 @@ const (
 	B_OP_MUL
 	B_OP_DIV
 	B_OP_EQ
+	B_RULE_CHANGE
 )
 
 type ReferenceDeclaration struct {

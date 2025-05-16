@@ -1,10 +1,7 @@
 package parts
 
 import (
-	"errors"
 	"fmt"
-	"strings"
-	"unicode"
 )
 
 type Scanner struct {
@@ -12,90 +9,55 @@ type Scanner struct {
 	Source []rune
 	Index  int
 	Line   int
+
+	Buffored []Token
 }
 
 func (s *Scanner) Next() (Token, error) {
-	if s.Peek() == 0 {
-		return Token{Type: TokenInvalid, Value: []rune("EOF")}, nil
+	if len(s.Buffored) != 0 {
+		rv := s.Buffored[0]
+
+		s.Buffored = s.Buffored[1:]
+
+		return rv, nil
 	}
 
-	for unicode.IsSpace(s.Peek()) {
-		s.Index++
-	}
-
-	//Additional check if file ends with a space
 	if s.Peek() == 0 {
 		return Token{Type: TokenInvalid, Value: []rune("EOF")}, nil
 	}
 
 	peekValue := s.Peek()
 
-	if peekValue == '"' {
-		return s.ParseQuote()
-	}
-
 	for _, rule := range s.Rules {
 		if rule.BaseRule(peekValue) {
 			rValue, rError := s.ParseRule(rule)
 
+			if rule.RType == SKIP_RULE {
+				return s.Next()
+			}
+
 			if rError != nil {
-				return rValue, rError
+				return Token{}, rError
 			}
 
-			if rValue.Type == TokenKeyword {
-				rValue = s.SplitByKeyword(rValue)
+			if len(rValue) == 0 {
+				return s.Next()
 			}
 
-			if rValue.Type == TokenOperator {
-				return s.SplitOperators(rValue)
+			if len(rValue) == 1 {
+				return rValue[0], nil
 			}
 
-			return rValue, rError
+			s.Buffored = rValue[1:]
+			return rValue[0], nil
 		}
+	}
+
+	if s.Peek() == 0 {
+		return Token{Type: TokenInvalid, Value: []rune("EOF")}, nil
 	}
 
 	return Token{}, fmt.Errorf("unknown token %s [%d, pos> %d:%d]", string(s.Peek()), s.Peek(), s.Line, s.Index)
-}
-
-func (s Scanner) SplitByKeyword(token Token) Token {
-	found := false
-
-	for _, kw := range Keywords {
-		if kw == string(token.Value) {
-			found = true
-			token.Value = []rune(strings.ToUpper(string(token.Value)))
-			break
-		}
-	}
-
-	if !found {
-		token.Type = TokenIdentifier
-	}
-
-	return token
-}
-
-func (s *Scanner) SplitOperators(token Token) (Token, error) {
-	tokenValue := string(token.Value)
-	name, ok := ValidOperators[tokenValue]
-
-	if ok {
-		return Token{Type: TokenOperator, Value: []rune(name)}, nil
-	}
-
-	for {
-		if len(tokenValue) == 0 {
-			return Token{}, errors.New("not valid operator")
-		}
-
-		tokenValue = tokenValue[0 : len(tokenValue)-1]
-		s.Index--
-		name, ok := ValidOperators[tokenValue]
-
-		if ok {
-			return Token{Type: TokenOperator, Value: []rune(name)}, nil
-		}
-	}
 }
 
 func (s *Scanner) Peek() rune {
@@ -106,49 +68,32 @@ func (s *Scanner) Peek() rune {
 	return 0
 }
 
-func (s *Scanner) ParseQuote() (Token, error) {
-	s.Index++
+func (s *Scanner) ParseRule(rule Rule) ([]Token, error) {
 	start := s.Index
 
 	for {
 		s.Index++
 
-		if s.Index >= len(s.Source) || (s.Peek() == '"' && s.Source[s.Index-1] != '\\') {
+		outOfBounds := s.Index >= len(s.Source)
+		matchesBase := rule.BaseRule(s.Peek())
+		matchesWhole := rule.Rule == nil || rule.Rule(s.Source[start:s.Index])
+
+		if outOfBounds || !matchesBase || !matchesWhole {
 			break
 		}
 	}
 
-	err := s.CheckBounds("Unterminated string")
+	if rule.Process != nil {
+		res, err := rule.Process(s.Source[start:s.Index])
 
-	if err != nil {
-		return Token{}, err
-	}
-
-	if s.Peek() != '"' {
-		return Token{}, fmt.Errorf("unterminated string")
-	}
-
-	val := s.Source[start:s.Index]
-
-	s.Index++
-
-	return Token{Type: TokenString, Value: val}, nil
-}
-
-func (s *Scanner) ParseRule(rule Rule) (Token, error) {
-	start := s.Index
-
-	for {
-		s.Index++
-
-		if s.Index >= len(s.Source) || !rule.BaseRule(s.Peek()) {
-			break
+		if err != nil {
+			return []Token{}, err
 		}
+
+		return res, nil
 	}
 
-	val := s.Source[start:s.Index]
-
-	return Token{Type: rule.Result, Value: val}, nil
+	return []Token{{Type: rule.Result, Value: s.Source[start:s.Index]}}, nil
 }
 
 func (s *Scanner) CheckBounds(msg string) error {

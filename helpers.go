@@ -228,7 +228,7 @@ func FillStruct[T any](data map[string]any, vm *VM, out T) {
 	outStruct := reflect.ValueOf(out).Elem()
 	outType := outStruct.Type()
 
-	for i := 0; i < outType.NumField(); i++ {
+	for i := range outType.NumField() {
 		field := outType.Field(i)
 		fieldValue := outStruct.Field(i)
 
@@ -317,7 +317,7 @@ func FillSlice[T any](fieldIdx int, data []any, vm *VM, out T) {
 	if fieldValue.Kind() == reflect.Slice && fieldValue.Type().Elem().Kind() == reflect.Struct {
 		newSlice := reflect.MakeSlice(fieldValue.Type(), 0, len(data))
 
-		for i := 0; i < len(data); i++ {
+		for i := range data {
 			newStruct := reflect.New(fieldValue.Type().Elem()).Elem()
 
 			if val, ok := data[i].(map[string]any); ok {
@@ -334,7 +334,7 @@ func FillSlice[T any](fieldIdx int, data []any, vm *VM, out T) {
 
 	newSlice := reflect.MakeSlice(fieldValue.Type(), 0, len(data))
 
-	for i := 0; i < len(data); i++ {
+	for i := range data {
 		newSlice = reflect.Append(newSlice, reflect.ValueOf(data[i]).Convert(fieldValue.Type().Elem()))
 	}
 

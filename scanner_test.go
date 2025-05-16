@@ -99,3 +99,32 @@ func TestEmptyParen(t *testing.T) {
 		}
 	}
 }
+
+func TestString(t *testing.T) {
+	scanner := GetScannerWithSource("\"text\" + \"text\"")
+
+	expectedTokens := []Token{
+		{Type: TokenString, Value: []rune("text")},
+		{Type: TokenOperator, Value: []rune("PLUS")},
+		{Type: TokenString, Value: []rune("text")},
+	}
+
+	for _, curr := range expectedTokens {
+		token, err := scanner.Next()
+
+		if err != nil {
+			t.Errorf("unexpected error: %s", err)
+			return
+		}
+
+		if string(token.Value) != string(curr.Value) {
+			t.Errorf("token values don't match: %s != %s", string(token.Value), string(curr.Value))
+			return
+		}
+
+		if token.Type != curr.Type {
+			t.Errorf("token types don't match: %d != %d", token.Type, curr.Type)
+			return
+		}
+	}
+}
