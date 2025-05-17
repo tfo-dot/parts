@@ -31,7 +31,11 @@ func TestHelperNoTags(t *testing.T) {
 	ReadFromParts(vm, &testStruct)
 
 	if testStruct.Age != 22 && testStruct.Name != "tfo" {
-		t.Errorf("inexpected values in the interface got (%d, %s) expected (22, \"tfo\")", testStruct.Age, testStruct.Name)
+		t.Errorf(
+			"inexpected values in the interface got (%d, %s) expected (22, \"tfo\")",
+			testStruct.Age,
+			testStruct.Name,
+		)
 		return
 	}
 }
@@ -61,7 +65,11 @@ func TestHelperWithTags(t *testing.T) {
 	ReadFromParts(vm, &testStruct)
 
 	if testStruct.Age != 22 && testStruct.Name != "tfo" {
-		t.Errorf("inexpected values in the interface got (%d, %s) expected (22, \"tfo\")", testStruct.Age, testStruct.Name)
+		t.Errorf(
+			"inexpected values in the interface got (%d, %s) expected (22, \"tfo\")",
+			testStruct.Age,
+			testStruct.Name,
+		)
 		return
 	}
 }

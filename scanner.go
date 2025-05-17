@@ -2,6 +2,7 @@ package parts
 
 import (
 	"fmt"
+	"slices"
 )
 
 type Scanner struct {
@@ -26,10 +27,36 @@ func (s *Scanner) Next() (Token, error) {
 		return Token{Type: TokenInvalid, Value: []rune("EOF")}, nil
 	}
 
-	peekValue := s.Peek()
-
 	for _, rule := range s.Rules {
-		if rule.BaseRule(peekValue) {
+
+		if rule.BaseRule == nil {
+			if slices.Contains(rule.ValidChars, s.Peek()) {
+				rValue, rError := s.ParseRule(rule)
+
+				if rule.RType == SKIP_RULE {
+					return s.Next()
+				}
+
+				if rError != nil {
+					return Token{}, rError
+				}
+
+				if len(rValue) == 0 {
+					return s.Next()
+				}
+
+				if len(rValue) == 1 {
+					return rValue[0], nil
+				}
+
+				s.Buffored = rValue[1:]
+				return rValue[0], nil
+			} else {
+				continue
+			}
+		}
+
+		if rule.BaseRule(s.Peek()) {
 			rValue, rError := s.ParseRule(rule)
 
 			if rule.RType == SKIP_RULE {
@@ -75,16 +102,17 @@ func (s *Scanner) ParseRule(rule Rule) ([]Token, error) {
 		s.Index++
 
 		outOfBounds := s.Index >= len(s.Source)
-		matchesBase := rule.BaseRule(s.Peek())
+		noBaseAndValid := rule.BaseRule == nil && slices.Contains(rule.ValidChars, s.Peek())
+		matchesBase :=  rule.BaseRule != nil && rule.BaseRule(s.Peek())
 		matchesWhole := rule.Rule == nil || rule.Rule(s.Source[start:s.Index])
 
-		if outOfBounds || !matchesBase || !matchesWhole {
+		if outOfBounds || !(noBaseAndValid || matchesBase) || !matchesWhole {
 			break
 		}
 	}
 
 	if rule.Process != nil {
-		res, err := rule.Process(s.Source[start:s.Index])
+		res, err := rule.Process(rule.Mappings, s.Source[start:s.Index])
 
 		if err != nil {
 			return []Token{}, err

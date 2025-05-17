@@ -60,7 +60,10 @@ func (vm *VM) Execute() error {
 		}
 
 		if exprType == NoValue {
-			return fmt.Errorf("got no value, expected value at '%s'", nameLiteral.(*Literal).Value.(ReferenceDeclaration).Reference)
+			return fmt.Errorf(
+				"got no value, expected value at '%s'",
+				nameLiteral.(*Literal).Value.(ReferenceDeclaration).Reference,
+			)
 		}
 
 		if exprType != TypeLiteral {
@@ -360,7 +363,7 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 
 		vm.Idx++
 
-		for i := 0; i < len(values); i++ {
+		for i := range values {
 			exprType, expr, err := vm.runExpr(true)
 
 			if err != nil {
@@ -431,7 +434,10 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 		lit := jumpVal.(*Literal)
 
 		if lit.LiteralType != BoolLiteral {
-			return UndefinedExpression, nil, fmt.Errorf("expected boolean value got %d (resolve jump condition)", lit.LiteralType)
+			return UndefinedExpression, nil, fmt.Errorf(
+				"expected boolean value got %d (resolve jump condition)",
+				lit.LiteralType,
+			)
 		}
 
 		conditionTrue := lit.Value.(bool)
@@ -732,7 +738,14 @@ func (vm *VM) decodeLen() (int, error) {
 	}
 
 	if vm.Code[vm.Idx] == 127 {
-		value := int(vm.Code[vm.Idx+1])<<56 | int(vm.Code[vm.Idx+2])<<48 | int(vm.Code[vm.Idx+3])<<40 | int(vm.Code[vm.Idx+4])<<32 | int(vm.Code[vm.Idx+5])<<24 | int(vm.Code[vm.Idx+6])<<16 | int(vm.Code[vm.Idx+7])<<8 | int(vm.Code[vm.Idx+8])
+		value := int(vm.Code[vm.Idx+1])<<56 |
+			int(vm.Code[vm.Idx+2])<<48 |
+			int(vm.Code[vm.Idx+3])<<40 |
+			int(vm.Code[vm.Idx+4])<<32 |
+			int(vm.Code[vm.Idx+5])<<24 |
+			int(vm.Code[vm.Idx+6])<<16 |
+			int(vm.Code[vm.Idx+7])<<8 |
+			int(vm.Code[vm.Idx+8])
 
 		vm.Idx += 9
 

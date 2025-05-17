@@ -3,44 +3,11 @@ package parts
 import (
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"unicode"
 )
 
 type TokenType = int
-
-var Operators = []rune{'+', '-', '/', '*', ';', '[', ']', '(', ')', '{', '}', '.', ':', ',', '|', '&', '>', '<', '!', '#', '-', '=', '?'}
-
-var Keywords = []string{
-	"false", "if", "let", "true",
-	"fun", "return", "else", "static",
-	"for", "class", "break", "continue",
-	"import", "from", "as", "syntax",
-}
-
-var ValidOperators = map[string]string{
-	"+":  "PLUS",
-	"-":  "MINUS",
-	"/":  "SLASH",
-	"*":  "STAR",
-	";":  "SEMICOLON",
-	":":  "COLON",
-	".":  "DOT",
-	",":  "COMMA",
-	"(":  "LEFT_PAREN",
-	")":  "RIGHT_PAREN",
-	"{":  "LEFT_BRACE",
-	"}":  "RIGHT_BRACE",
-	"[":  "LEFT_BRACKET",
-	"]":  "RIGHT_BRACKET",
-	"@":  "AT",
-	"=":  "EQUALS",
-	"|>": "OBJ_START",
-	"<|": "OBJ_END",
-	"#>": "META",
-	"==": "EQUALITY",
-}
 
 const (
 	TokenOperator TokenType = iota
@@ -60,23 +27,22 @@ const (
 )
 
 type Rule struct {
-	Result   TokenType
-	BaseRule func(r rune) bool
-	Rule     func(runs []rune) bool
-	Process  func(runs []rune) ([]Token, error)
-	RType    RuleType
+	Result     TokenType
+	BaseRule   func(r rune) bool
+	Rule       func(runs []rune) bool
+	Process    func(mappings map[string]string, runs []rune) ([]Token, error)
+	RType      RuleType
+	Mappings   map[string]string
+	ValidChars []rune
 }
 
 var ScannerRules = []Rule{
 	{
 		Result: TokenOperator,
-		BaseRule: func(r rune) bool {
-			return slices.Contains(Operators, r)
-		},
-		RType: TOKEN_RULE,
-		Process: func(runs []rune) ([]Token, error) {
+		RType:  TOKEN_RULE,
+		Process: func(mappings map[string]string, runs []rune) ([]Token, error) {
 			tokenValue := string(runs)
-			name, ok := ValidOperators[tokenValue]
+			name, ok := mappings[tokenValue]
 
 			if ok {
 				return []Token{{Type: TokenOperator, Value: []rune(name)}}, nil
@@ -92,7 +58,7 @@ var ScannerRules = []Rule{
 					return []Token{}, fmt.Errorf("not valid operator ( %s )", tokenValue[offset:])
 				}
 
-				name, ok := ValidOperators[temp]
+				name, ok := mappings[temp]
 
 				if ok {
 					offset += len(temp)
@@ -107,6 +73,18 @@ var ScannerRules = []Rule{
 
 			return retTokens, nil
 		},
+		ValidChars: []rune{'+', '-', '/', '*', ';', '[', ']', '(', ')', '{', '}', '.', ':', ',', '|', '&', '>', '<', '!', '#', '-', '=', '?'},
+		Mappings: map[string]string{
+			"+": "PLUS", "-": "MINUS", "/": "SLASH", "*": "STAR",
+			";": "SEMICOLON", ":": "COLON",
+			".": "DOT", ",": "COMMA",
+			"(": "LEFT_PAREN", ")": "RIGHT_PAREN",
+			"{": "LEFT_BRACE", "}": "RIGHT_BRACE",
+			"[": "LEFT_BRACKET", "]": "RIGHT_BRACKET",
+			"@": "AT", "=": "EQUALS",
+			"|>": "OBJ_START", "<|": "OBJ_END",
+			"#>": "META", "==": "EQUALITY",
+		},
 	},
 	{
 		Result: TokenNumber,
@@ -120,13 +98,13 @@ var ScannerRules = []Rule{
 		BaseRule: func(r rune) bool {
 			return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || r == '_'
 		},
-		Process: func(runs []rune) ([]Token, error) {
+		Process: func(mappings map[string]string, runs []rune) ([]Token, error) {
 			token := Token{
 				Type:  TokenKeyword,
 				Value: runs,
 			}
 
-			if slices.Contains(Keywords, string(token.Value)) {
+			if _, has := mappings[string(token.Value)]; has {
 				token.Value = []rune(strings.ToUpper(string(token.Value)))
 			} else {
 				token.Type = TokenIdentifier
@@ -135,6 +113,12 @@ var ScannerRules = []Rule{
 			return []Token{token}, nil
 		},
 		RType: TOKEN_RULE,
+		Mappings: map[string]string{
+			"false": "", "if": "", "let": "", "true": "",
+			"fun": "", "return": "", "else": "", "static": "",
+			"for": "", "class": "", "break": "", "continue": "",
+			"import": "", "from": "", "as": "", "syntax": "",
+		},
 	},
 	{
 		Result: TokenSpace,
@@ -148,7 +132,7 @@ var ScannerRules = []Rule{
 		RType:    TOKEN_RULE,
 		BaseRule: func(r rune) bool { return true },
 		Rule:     func(runs []rune) bool { return len(runs) == 1 || runs[len(runs)-1] != '"' },
-		Process: func(runs []rune) ([]Token, error) {
+		Process: func(mappings map[string]string, runs []rune) ([]Token, error) {
 			token := Token{
 				Type:  TokenString,
 				Value: runs,
