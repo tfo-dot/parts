@@ -6,7 +6,7 @@ import (
 )
 
 type Scanner struct {
-	Rules  []Rule
+	Rules  []ScannerRule
 	Source []rune
 	Index  int
 	Line   int
