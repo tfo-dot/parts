@@ -136,7 +136,7 @@ func (l *Literal) ToGoTypes(vm *VM) (any, error) {
 	case ParsedListLiteral:
 		entriesList := make([]any, len(l.Value.(PartsIndexable).GetAll()))
 
-		for i := 0; i < len(l.Value.(PartsIndexable).GetAll()); i++ {
+		for i := range len(l.Value.(PartsIndexable).GetAll()) {
 			entry := l.Value.(PartsIndexable).GetByKey(fmt.Sprintf("IT%d", i))
 
 			val, err := entry.ToGoTypes(vm)
@@ -542,7 +542,7 @@ func (ffi FFIFunction) GetArguments() []string {
 	numIn := funcType.NumIn()
 	args := make([]string, numIn)
 
-	for i := 0; i < numIn; i++ {
+	for i := range numIn {
 		args[i] = fmt.Sprintf("val_%d", i)
 	}
 
@@ -715,7 +715,7 @@ func HashLiteral(literal Literal) (string, error) {
 		return fmt.Sprintf("RT%s", literal.Value.(ReferenceDeclaration).Reference), nil
 	}
 
-	return "", errors.New("literal not hashable")
+	return "", fmt.Errorf("literal not hashable %d", literal.LiteralType)
 }
 
 func NewFFIMap(val any) FFIMap {

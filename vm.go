@@ -130,7 +130,7 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 	case B_DOT:
 		vm.Idx++
 
-		exprType, rawAccessor, err := vm.runExpr(unwindDot)
+		exprType, rawAccessor, err := vm.runExpr(false)
 
 		if err != nil {
 			return UndefinedExpression, nil, errors.Join(errors.New("got error while running expression"), err)
@@ -165,6 +165,66 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 		if accessor.LiteralType == ListLiteral || accessor.LiteralType == ObjLiteral {
 			if accessor, err = vm.simplifyLiteral(accessor, true); err != nil {
 				return UndefinedExpression, nil, errors.Join(errors.New("got error while running expression"), err)
+			}
+		}
+
+		if vm.Code[vm.Idx] == B_SET {
+			vm.Idx++
+
+			exprType, nameLiteral, err := vm.runExpr(false)
+
+			if err != nil {
+				return UndefinedExpression, nil, errors.Join(errors.New("got error while running expression"), err)
+			}
+
+			if exprType != TypeLiteral && exprType != DotExpression {
+				return UndefinedExpression, nil, errors.New("expected literal as variable name")
+			}
+
+			if exprType == DotExpression {
+				_, value, err := vm.runExpr(true)
+
+				if err != nil {
+					return UndefinedExpression, nil, errors.Join(errors.New("got error while running variable value"), err)
+				}
+
+				simpleValue, err := vm.simplifyLiteral(value.(*Literal), true)
+
+				if err != nil {
+					return UndefinedExpression, nil, errors.Join(errors.New("got error while simplyfing value"), err)
+				}
+
+				val, err := vm.Enviroment.assignDot(vm, append([]*Literal{rawAccessor.(*Literal)}, nameLiteral.([]*Literal)...), simpleValue)
+
+				if err != nil {
+					return UndefinedExpression, nil, errors.Join(errors.New("got error while assigning to a variable"), err)
+				}
+
+				vm.LastExpr = val
+
+				return TypeLiteral, val, nil
+			} else {
+				_, value, err := vm.runExpr(true)
+
+				if err != nil {
+					return UndefinedExpression, nil, errors.Join(errors.New("got error while running variable value"), err)
+				}
+
+				simpleValue, err := vm.simplifyLiteral(value.(*Literal), true)
+
+				if err != nil {
+					return UndefinedExpression, nil, errors.Join(errors.New("got error while simplyfing value"), err)
+				}
+
+				val, err := vm.Enviroment.assignDot(vm, []*Literal{rawAccessor.(*Literal), nameLiteral.(*Literal)}, simpleValue)
+
+				if err != nil {
+					return UndefinedExpression, nil, errors.Join(errors.New("got error while assigning to a variable"), err)
+				}
+
+				vm.LastExpr = val
+
+				return TypeLiteral, val, nil
 			}
 		}
 

@@ -133,10 +133,7 @@ var ScannerRules = []Rule{
 		BaseRule: func(r rune) bool { return true },
 		Rule:     func(runs []rune) bool { return len(runs) == 1 || runs[len(runs)-1] != '"' },
 		Process: func(mappings map[string]string, runs []rune) ([]Token, error) {
-			token := Token{
-				Type:  TokenString,
-				Value: runs,
-			}
+			token := Token{Type: TokenString, Value: runs}
 
 			if runs[0] != '"' || runs[len(runs)-1] != '"' {
 				return []Token{}, errors.New("got unterminated string")

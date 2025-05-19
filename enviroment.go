@@ -155,6 +155,7 @@ func (env *VMEnviroment) Has(key string) bool {
 
 func (env *VMEnviroment) Append(other *VMEnviroment) {
 	deepestEnv := other
+	
 	for deepestEnv.Enclosing != nil {
 		deepestEnv = deepestEnv.Enclosing
 	}

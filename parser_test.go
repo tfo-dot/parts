@@ -8,7 +8,7 @@ import (
 func TestLetFalse(t *testing.T) {
 	parser := GetParserWithSource("let x = false;")
 
-	bytecode, err := parser.parse()
+	bytecode, err := parser.parseAll()
 
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
@@ -661,7 +661,7 @@ func TestFunFieldCal(t *testing.T) {
 		return
 	}
 
-	CheckBytecode(t, bytecode, []Bytecode{B_CALL, B_DOT, B_LITERAL, Bytecode(varKey), B_LITERAL, Bytecode(varKey2), Bytecode(1), B_LITERAL, Bytecode(varVal)})
+	CheckBytecode(t, bytecode, []Bytecode{B_DOT, B_LITERAL, Bytecode(varKey), B_CALL, B_LITERAL, Bytecode(varKey2), Bytecode(1), B_LITERAL, Bytecode(varVal)})
 }
 
 func TestFunFieldArrCal(t *testing.T) {
@@ -756,7 +756,7 @@ func TestSetObjExpression(t *testing.T) {
 		return
 	}
 
-	CheckBytecode(t, bytecode, []Bytecode{B_SET, B_DOT, B_LITERAL, Bytecode(varKey), B_LITERAL, Bytecode(varKey2), B_LITERAL, Bytecode(varVal)})
+	CheckBytecode(t, bytecode, []Bytecode{B_DOT, B_LITERAL, Bytecode(varKey), B_SET, B_LITERAL, Bytecode(varKey2), B_LITERAL, Bytecode(varVal)})
 }
 
 func TestSetObjIndexExpression(t *testing.T) {
@@ -858,7 +858,7 @@ func TestSetDotListExpression(t *testing.T) {
 		return
 	}
 
-	CheckBytecode(t, bytecode, []Bytecode{B_SET, B_DOT, B_LITERAL, Bytecode(varKey), B_LITERAL, Bytecode(varVal), B_LITERAL, Bytecode(varVal2)})
+	CheckBytecode(t, bytecode, []Bytecode{B_DOT, B_LITERAL, Bytecode(varKey), B_SET, B_LITERAL, Bytecode(varVal), B_LITERAL, Bytecode(varVal2)})
 }
 
 func TestSetListDynamicExpression(t *testing.T) {
@@ -926,7 +926,7 @@ func TestSetListDotFieldExpression(t *testing.T) {
 		return
 	}
 
-	CheckBytecode(t, bytecode, []Bytecode{B_SET, B_DOT, B_LITERAL, Bytecode(varKey), B_LITERAL, Bytecode(varKey2), B_LITERAL, Bytecode(varVal)})
+	CheckBytecode(t, bytecode, []Bytecode{B_DOT, B_LITERAL, Bytecode(varKey), B_SET, B_LITERAL, Bytecode(varKey2), B_LITERAL, Bytecode(varVal)})
 }
 
 func TestIfExpressionFull(t *testing.T) {

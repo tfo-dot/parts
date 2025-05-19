@@ -16,10 +16,11 @@ func GetParserWithSource(source string) Parser {
 
 	return Parser{
 		Scanner:   &scanner,
-		Scope:     TopLevel,
 		Literals:  InitialLiterals,
 		LastToken: Token{Type: TokenInvalid},
 		Meta:      make(map[string]string),
+		Rules:     ParserRules,
+		PostFix:   PostFixRules,
 	}
 }
 
@@ -28,10 +29,11 @@ func GetVMWithSource(source string) (*VM, error) {
 
 	parser := Parser{
 		Scanner:   &scanner,
-		Scope:     TopLevel,
 		Literals:  InitialLiterals,
 		LastToken: Token{Type: TokenInvalid},
 		Meta:      make(map[string]string),
+		Rules:     ParserRules,
+		PostFix:   PostFixRules,
 	}
 
 	code, err := parser.parseAll()
@@ -68,10 +70,11 @@ func RunString(codeString string) (*VM, error) {
 
 	parser := Parser{
 		Scanner:   &scanner,
-		Scope:     TopLevel,
 		Literals:  InitialLiterals,
 		LastToken: Token{Type: TokenInvalid},
 		Meta:      make(map[string]string),
+		Rules:     ParserRules,
+		PostFix:   PostFixRules,
 	}
 
 	code, err := parser.parseAll()
