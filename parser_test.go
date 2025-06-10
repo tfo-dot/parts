@@ -1037,7 +1037,7 @@ func TestMathAdd(t *testing.T) {
 		return
 	}
 
-	CheckBytecode(t, bytecode, []Bytecode{B_OP_ADD, B_LITERAL, Bytecode(varVal), B_LITERAL, Bytecode(varVal)})
+	CheckBytecode(t, bytecode, []Bytecode{B_BIN_OP, B_OP_ADD, B_LITERAL, Bytecode(varVal), B_LITERAL, Bytecode(varVal)})
 }
 
 func TestMathSub(t *testing.T) {
@@ -1056,7 +1056,7 @@ func TestMathSub(t *testing.T) {
 		return
 	}
 
-	CheckBytecode(t, bytecode, []Bytecode{B_OP_MIN, B_LITERAL, Bytecode(varVal), B_LITERAL, Bytecode(varVal)})
+	CheckBytecode(t, bytecode, []Bytecode{B_BIN_OP, B_OP_MIN, B_LITERAL, Bytecode(varVal), B_LITERAL, Bytecode(varVal)})
 }
 
 func TestMathMul(t *testing.T) {
@@ -1075,7 +1075,7 @@ func TestMathMul(t *testing.T) {
 		return
 	}
 
-	CheckBytecode(t, bytecode, []Bytecode{B_OP_MUL, B_LITERAL, Bytecode(varVal), B_LITERAL, Bytecode(varVal)})
+	CheckBytecode(t, bytecode, []Bytecode{B_BIN_OP, B_OP_MUL, B_LITERAL, Bytecode(varVal), B_LITERAL, Bytecode(varVal)})
 }
 
 func TestMathDiv(t *testing.T) {
@@ -1094,7 +1094,7 @@ func TestMathDiv(t *testing.T) {
 		return
 	}
 
-	CheckBytecode(t, bytecode, []Bytecode{B_OP_DIV, B_LITERAL, Bytecode(varVal), B_LITERAL, Bytecode(varVal)})
+	CheckBytecode(t, bytecode, []Bytecode{B_BIN_OP, B_OP_DIV, B_LITERAL, Bytecode(varVal), B_LITERAL, Bytecode(varVal)})
 }
 
 func TestOpEq(t *testing.T) {
@@ -1113,7 +1113,7 @@ func TestOpEq(t *testing.T) {
 		return
 	}
 
-	CheckBytecode(t, bytecode, []Bytecode{B_OP_EQ, B_LITERAL, Bytecode(varVal), B_LITERAL, Bytecode(varVal)})
+	CheckBytecode(t, bytecode, []Bytecode{B_BIN_OP, B_OP_EQ, B_LITERAL, Bytecode(varVal), B_LITERAL, Bytecode(varVal)})
 }
 
 func TestSomeParsing(t *testing.T) {
@@ -1171,7 +1171,107 @@ func TestSomeParsing(t *testing.T) {
 		t.Log("Got through first check")
 	}
 
-	CheckBytecode(t, funcObj.Value.(FunctionDeclaration).Body, []Bytecode{B_RETURN, B_OP_MUL, B_LITERAL, Bytecode(val2), B_LITERAL, Bytecode(name)})
+	CheckBytecode(t, funcObj.Value.(FunctionDeclaration).Body, []Bytecode{B_RETURN, B_BIN_OP, B_OP_MUL, B_LITERAL, Bytecode(val2), B_LITERAL, Bytecode(name)})
+}
+
+func TestModdedParser(t *testing.T) {
+	source := "syntax{` "
+	source += `
+		ClearScanner()
+		ClearParser()
+
+		AddScannerRule( |>
+			Result: TokenKeyword,
+			BaseRule: fun(r) {
+				return ((r >= "a") * (r <= "z")) + ((r >= "A") * (r <= "Z")) + (r == "_")
+			},
+			Process: fun(mappings, runs) {
+				if (Object.Has)(mappings, runs) {
+					return |> Type: TokenKeyword, Value: mappings[runs] <|
+				} else {
+					return |> Type: TokenIdentifier, Value: runs <|
+				}
+			},
+			Mappings: |> "false": "FALSE_CRINGE_KW", "true": "TRUE_CRINGE_KW" <|
+		<| )
+
+		AddScannerRule( |>
+			Result: TokenSpace,
+			Skip: true,
+			BaseRule: fun(r) { return r == " " }
+		<| )
+
+		AddParserRule(false, |>
+		    Id: "PFalse",
+		    AdvanceToken: true,
+		    Rule: fun(p) {
+		    	return ParserCheck(p, TokenKeyword, "FALSE_CRINGE_KW")
+		    },
+		    Parse: fun(p) {
+		    	"Literal at 0 - false"
+		    	return [2, 0]
+		    }
+		<| )
+
+		AddParserRule(false, |>
+		    Id: "PTrue",
+		    AdvanceToken: true,
+		    Rule: fun(p) {
+		    	return ParserCheck(p, TokenKeyword, "TRUE_CRINGE_KW")
+		    },
+		    Parse: fun(p) {
+		    	"Literal at 0 - false"
+		    	return [2, 1]
+		    }
+		<| )
+
+		AddParserRule(true, |>
+		    Id: "NullTerminator",
+		    AdvanceToken: true,
+		    Rule: fun(p) {
+		    	return ParserCheck(p, TokenIdentifier, "null")
+		    },
+		    Parse: fun(p, btc) {
+		    	let var = ParserAppendLiteral(p, |>
+			    	LiteralType: RefLiteral,
+			    	Value: |>
+			    		Reference: "printLn",
+			    		Dynamic: false
+			    	<|
+		    	<| )
+
+		    	let x = ((Array.AppendAll)([7], var)) + 1
+
+		    	return (Array.AppendAll)( x, btc )
+		    }
+		<| )
+		`
+	source += "` } false null true null"
+
+	parser := GetParserWithSource(source)
+
+	bytecode, err := parser.parseAll()
+
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+
+	if len(bytecode) == 0 {
+		t.Error("bytecode is empty")
+		return
+	}
+
+	refIdx, _ := GetParserLiteral(parser, RefLiteral, ReferenceDeclaration{
+		Reference: "printLn",
+	})
+
+	if refIdx == -1 {
+		t.Error("literal (Ref, printLn) wasn't present")
+		return
+	}
+
+	CheckBytecode(t, bytecode, []Bytecode{B_CALL, B_LITERAL, Bytecode(refIdx), 1, B_LITERAL, 0, B_CALL, B_LITERAL, Bytecode(refIdx), 1, B_LITERAL, 1})
 }
 
 func CheckBytecode(t *testing.T, result []Bytecode, expected []Bytecode) bool {

@@ -28,12 +28,11 @@ func (s *Scanner) Next() (Token, error) {
 	}
 
 	for _, rule := range s.Rules {
-
 		if rule.BaseRule == nil {
 			if slices.Contains(rule.ValidChars, s.Peek()) {
 				rValue, rError := s.ParseRule(rule)
 
-				if rule.RType == SKIP_RULE {
+				if rule.Skip {
 					return s.Next()
 				}
 
@@ -59,7 +58,7 @@ func (s *Scanner) Next() (Token, error) {
 		if rule.BaseRule(s.Peek()) {
 			rValue, rError := s.ParseRule(rule)
 
-			if rule.RType == SKIP_RULE {
+			if rule.Skip {
 				return s.Next()
 			}
 
@@ -95,7 +94,7 @@ func (s *Scanner) Peek() rune {
 	return 0
 }
 
-func (s *Scanner) ParseRule(rule Rule) ([]Token, error) {
+func (s *Scanner) ParseRule(rule ScannerRule) ([]Token, error) {
 	start := s.Index
 
 	for {
@@ -103,7 +102,7 @@ func (s *Scanner) ParseRule(rule Rule) ([]Token, error) {
 
 		outOfBounds := s.Index >= len(s.Source)
 		noBaseAndValid := rule.BaseRule == nil && slices.Contains(rule.ValidChars, s.Peek())
-		matchesBase :=  rule.BaseRule != nil && rule.BaseRule(s.Peek())
+		matchesBase := rule.BaseRule != nil && rule.BaseRule(s.Peek())
 		matchesWhole := rule.Rule == nil || rule.Rule(s.Source[start:s.Index])
 
 		if outOfBounds || !(noBaseAndValid || matchesBase) || !matchesWhole {

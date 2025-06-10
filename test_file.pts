@@ -8,3 +8,5 @@ let Loot = [
   |> Type: 1, Count: 130 <|,
   |> Type: 2, Count: 315 <|
 ]
+
+printLn(Loot)

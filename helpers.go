@@ -8,7 +8,7 @@ import (
 )
 
 func GetScannerWithSource(source string) Scanner {
-	return Scanner{Source: []rune(source), Rules: ScannerRules}
+	return Scanner{Source: []rune(source), Rules: GetScannerRules()}
 }
 
 func GetParserWithSource(source string) Parser {
@@ -19,22 +19,13 @@ func GetParserWithSource(source string) Parser {
 		Literals:  InitialLiterals,
 		LastToken: Token{Type: TokenInvalid},
 		Meta:      make(map[string]string),
-		Rules:     ParserRules,
-		PostFix:   PostFixRules,
+		Rules:     GetParserRules(),
+		PostFix:   GetPostFixRules(),
 	}
 }
 
 func GetVMWithSource(source string) (*VM, error) {
-	scanner := GetScannerWithSource(source)
-
-	parser := Parser{
-		Scanner:   &scanner,
-		Literals:  InitialLiterals,
-		LastToken: Token{Type: TokenInvalid},
-		Meta:      make(map[string]string),
-		Rules:     ParserRules,
-		PostFix:   PostFixRules,
-	}
+	parser := GetParserWithSource(source)
 
 	code, err := parser.parseAll()
 
@@ -66,16 +57,7 @@ func GetVMWithSource(source string) (*VM, error) {
 }
 
 func RunString(codeString string) (*VM, error) {
-	scanner := GetScannerWithSource(codeString)
-
-	parser := Parser{
-		Scanner:   &scanner,
-		Literals:  InitialLiterals,
-		LastToken: Token{Type: TokenInvalid},
-		Meta:      make(map[string]string),
-		Rules:     ParserRules,
-		PostFix:   PostFixRules,
-	}
+	parser := GetParserWithSource(codeString)
 
 	code, err := parser.parseAll()
 

@@ -1355,3 +1355,27 @@ func TestNestedObject(t *testing.T) {
 		return
 	}
 }
+
+func TestNestedFunctionCalls(t *testing.T) {
+	type StatsEnum int
+
+	vm, err := GetVMWithSource(`
+		let x(a) = 1 * a
+		let y(a) = 2 * a
+		let z(a) = 3 * a
+
+		printLn(z(y(x(1))))
+	`)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	err = vm.Run()
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+}

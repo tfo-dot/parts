@@ -82,7 +82,13 @@ func (p *Parser) parse() ([]Bytecode, error) {
 		}
 	}
 
-	return []Bytecode{}, errors.New("Unknown rule?")
+	currentToken, err := p.peek()
+
+	if err != nil {
+		panic(err)
+	}
+
+	return []Bytecode{}, fmt.Errorf("Unknown rule? (%d - %s)", currentToken.Type, string(currentToken.Value))
 }
 
 func (p *Parser) parseWithRule(id string) ([]Bytecode, error) {
@@ -185,12 +191,20 @@ const (
 	B_RESOLVE
 	B_COND_JUMP
 	B_JUMP
-	B_OP_ADD
+	B_BIN_OP
+	B_RULE_CHANGE
+)
+
+type BinOp Bytecode
+
+const (
+	B_OP_ADD Bytecode = iota
 	B_OP_MIN
 	B_OP_MUL
 	B_OP_DIV
 	B_OP_EQ
-	B_RULE_CHANGE
+	B_OP_GT
+	B_OP_LT
 )
 
 type ReferenceDeclaration struct {

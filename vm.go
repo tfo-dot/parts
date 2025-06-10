@@ -115,6 +115,18 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 		vm.Enviroment = vm.Enviroment.Enclosing
 
 		return ScopeChange, nil, nil
+	case B_BIN_OP:
+		vm.Idx++
+
+		rVal, err := vm.runOp()
+
+		if err != nil {
+			return UndefinedExpression, nil, errors.Join(errors.New("got error while running operation"), err)
+		}
+
+		vm.LastExpr = rVal
+
+		return TypeLiteral, rVal, nil
 	case B_LITERAL:
 		vm.Idx++
 
@@ -194,7 +206,9 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 					return UndefinedExpression, nil, errors.Join(errors.New("got error while simplyfing value"), err)
 				}
 
-				val, err := vm.Enviroment.assignDot(vm, append([]*Literal{rawAccessor.(*Literal)}, nameLiteral.([]*Literal)...), simpleValue)
+				val, err := vm.Enviroment.assignDot(
+					vm, append([]*Literal{rawAccessor.(*Literal)}, nameLiteral.([]*Literal)...), simpleValue,
+				)
 
 				if err != nil {
 					return UndefinedExpression, nil, errors.Join(errors.New("got error while assigning to a variable"), err)
@@ -260,20 +274,6 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 
 		if err != nil {
 			return UndefinedExpression, nil, errors.Join(errors.New("got error while hashing value"), err)
-		}
-
-		if _, is := accessor.Value.(PartsIndexable); !is {
-			//For some reason you can't cast FFIMap to PartsIndexable
-
-			if val, isFFIMap := accessor.Value.(FFIMap); isFFIMap {
-				if has := val.HasByKey(key); has {
-					rVal := val.GetByKey(key)
-					vm.LastExpr = rVal
-					return TypeLiteral, rVal, nil
-				} else {
-					return UndefinedExpression, nil, fmt.Errorf("key not found: %s", key)
-				}
-			}
 		}
 
 		if has := accessor.Value.(PartsIndexable).HasByKey(key); has {
@@ -600,16 +600,6 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 				return TypeLiteral, tempVM.ReturnValue, nil
 			}
 		}
-	case B_OP_ADD, B_OP_MIN, B_OP_MUL, B_OP_DIV, B_OP_EQ:
-		rVal, err := vm.runOp()
-
-		if err != nil {
-			return UndefinedExpression, nil, errors.Join(errors.New("got error while running operation"), err)
-		}
-
-		vm.LastExpr = rVal
-
-		return TypeLiteral, rVal, nil
 	default:
 		return UndefinedExpression, nil, fmt.Errorf("unrecognized bytecode: %d", vm.Code[vm.Idx])
 	}
@@ -663,6 +653,11 @@ func (vm *VM) runOp() (*Literal, error) {
 		return simpleLeft.opMul(simpleRight)
 	case B_OP_EQ:
 		return simpleLeft.opEq(simpleRight)
+	case B_OP_LT:
+		return simpleLeft.opLt(simpleRight)
+	case B_OP_GT:
+		return simpleLeft.opGt(simpleRight)
+
 	default:
 		return nil, fmt.Errorf("unrecognized operation: %d", vm.Code[vm.Idx])
 	}
@@ -679,7 +674,6 @@ const (
 )
 
 func (vm *VM) simplifyLiteral(literal *Literal, resolveRef bool) (*Literal, error) {
-
 	if literal.LiteralType == PointerLiteral {
 		val, valid := literal.Value.(Literal)
 

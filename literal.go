@@ -59,9 +59,10 @@ func (l *Literal) ToGoTypes(vm *VM) (any, error) {
 
 		return value.ToGoTypes(vm)
 	case FunLiteral:
-		return func(args ...any) (any, error) {
-			funcObj := l.Value.(PartsCallable)
+		capturedVM := vm
+		funcObj := l.Value.(PartsCallable)
 
+		val := func(args ...any) (any, error) {
 			values := make([]*Literal, len(args))
 
 			for idx, val := range args {
@@ -71,7 +72,7 @@ func (l *Literal) ToGoTypes(vm *VM) (any, error) {
 					return nil, errors.Join(errors.New("got error while converting from go value to parts"), err)
 				}
 
-				resolvedExpr, err := vm.simplifyLiteral(lit, true)
+				resolvedExpr, err := capturedVM.simplifyLiteral(lit, true)
 
 				if err != nil {
 					return nil, errors.Join(errors.New("got error while converting from go value to parts"), err)
@@ -80,7 +81,7 @@ func (l *Literal) ToGoTypes(vm *VM) (any, error) {
 				values[idx] = resolvedExpr
 			}
 
-			tempVM := vm.copyVM()
+			tempVM := capturedVM.copyVM()
 
 			for idx, param := range funcObj.GetArguments() {
 				tempVM.Enviroment.define(fmt.Sprintf("RT%s", param), values[idx])
@@ -114,9 +115,30 @@ func (l *Literal) ToGoTypes(vm *VM) (any, error) {
 			}
 
 			return converted, nil
-		}, nil
+		}
+
+		return val, nil
 	case ObjLiteral:
-		return nil, errors.New("use simplyfied ParsedObjLiteral")
+		newVal, err := vm.simplifyLiteral(l, true)
+
+		if err != nil {
+			return nil, errors.Join(fmt.Errorf("got error while converting value, %s", l.Value), err)
+		}
+
+		entryMap := make(map[string]any)
+
+		for key, entry := range newVal.Value.(PartsIndexable).GetAll() {
+			val, err := entry.ToGoTypes(vm)
+
+			if err != nil {
+				return nil, errors.Join(fmt.Errorf("got error while resolving value, %s", newVal.Value), err)
+			}
+
+			entryMap[key] = val
+		}
+
+		return entryMap, nil
+
 	case ParsedObjLiteral:
 		entryMap := make(map[string]any)
 
@@ -132,7 +154,13 @@ func (l *Literal) ToGoTypes(vm *VM) (any, error) {
 
 		return entryMap, nil
 	case ListLiteral:
-		return nil, errors.New("use simplyfied ParsedListLiteral")
+		temp, err := vm.simplifyLiteral(l, true)
+
+		if err != nil {
+			panic(err)
+		}
+
+		return temp.ToGoTypes(vm)
 	case ParsedListLiteral:
 		entriesList := make([]any, len(l.Value.(PartsIndexable).GetAll()))
 
@@ -401,6 +429,60 @@ func (l *Literal) opEq(other *Literal) (*Literal, error) {
 	}
 }
 
+func (l *Literal) opGt(other *Literal) (*Literal, error) {
+	if l.LiteralType != other.LiteralType {
+		return &Literal{BoolLiteral, false}, nil
+	}
+
+	if l.LiteralType == RefLiteral {
+		return nil, errors.New("expected value got reference")
+	}
+
+	switch l.LiteralType {
+	case IntLiteral:
+		return &Literal{BoolLiteral, l.Value.(int) > other.Value.(int)}, nil
+	case DoubleLiteral:
+		return &Literal{BoolLiteral, l.Value.(float64) > other.Value.(float64)}, nil
+	case BoolLiteral:
+		return &Literal{BoolLiteral, l.Value.(bool) && !other.Value.(bool)}, nil
+	case StringLiteral:
+		return &Literal{BoolLiteral, l.Value.(string) > other.Value.(string)}, nil
+	case ObjLiteral, ParsedObjLiteral:
+		return nil, errors.New("object check not implemented")
+	case ListLiteral, ParsedListLiteral:
+		return nil, errors.New("list check not implemented")
+	default:
+		return nil, errors.New("equality cannot be checked")
+	}
+}
+
+func (l *Literal) opLt(other *Literal) (*Literal, error) {
+	if l.LiteralType != other.LiteralType {
+		return &Literal{BoolLiteral, false}, nil
+	}
+
+	if l.LiteralType == RefLiteral {
+		return nil, errors.New("expected value got reference")
+	}
+
+	switch l.LiteralType {
+	case IntLiteral:
+		return &Literal{BoolLiteral, l.Value.(int) < other.Value.(int)}, nil
+	case DoubleLiteral:
+		return &Literal{BoolLiteral, l.Value.(float64) < other.Value.(float64)}, nil
+	case BoolLiteral:
+		return &Literal{BoolLiteral, !l.Value.(bool) && other.Value.(bool)}, nil
+	case StringLiteral:
+		return &Literal{BoolLiteral, l.Value.(string) < other.Value.(string)}, nil
+	case ObjLiteral, ParsedObjLiteral:
+		return nil, errors.New("object check not implemented")
+	case ListLiteral, ParsedListLiteral:
+		return nil, errors.New("list check not implemented")
+	default:
+		return nil, errors.New("equality cannot be checked")
+	}
+}
+
 func (l *Literal) pretify() string {
 	switch l.LiteralType {
 	case IntLiteral:
@@ -447,20 +529,28 @@ func LiteralFromGo(value any) (*Literal, error) {
 	case reflect.Bool:
 		return &Literal{BoolLiteral, value}, nil
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return &Literal{IntLiteral, value.(int)}, nil
-		//Different case in case sometimes uint types are added to parts
+		v := reflect.ValueOf(value)
+		return &Literal{IntLiteral, int(v.Int())}, nil
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return &Literal{IntLiteral, value.(int)}, nil
+		v := reflect.ValueOf(value)
+		return &Literal{IntLiteral, int(v.Uint())}, nil
 	case reflect.Float32, reflect.Float64:
 		return &Literal{DoubleLiteral, value.(float64)}, nil
 	case reflect.String:
 		return &Literal{StringLiteral, value}, nil
 	case reflect.Func:
 		return &Literal{FunLiteral, FFIFunction{value}}, nil
-	case reflect.Array:
-		return &Literal{ParsedListLiteral, ConvertListToParts(value.([]any))}, nil
-	case reflect.Slice:
-		return &Literal{ParsedListLiteral, ConvertListToParts(value.([]any))}, nil
+	case reflect.Array, reflect.Slice:
+
+		reflectVal := reflect.ValueOf(value)
+
+		tempArr := make([]any, reflectVal.Len())
+
+		for i := range reflectVal.Len() {
+			tempArr[i] = reflectVal.Index(i).Interface()
+		}
+
+		return &Literal{ParsedListLiteral, ConvertListToParts(tempArr)}, nil
 	case reflect.Map:
 		return &Literal{ParsedObjLiteral, NewFFIMap(value)}, nil
 	case reflect.Pointer:
@@ -506,9 +596,7 @@ func (ffi FFIFunction) Call(vm *VM) error {
 			return err
 		}
 
-		actualType := funcType.In(idx)
-
-		reflectNew := reflect.New(actualType).Elem()
+		reflectNew := reflect.New(funcType.In(idx)).Elem()
 
 		reflectNew.Set(reflect.ValueOf(converted))
 
@@ -718,6 +806,6 @@ func HashLiteral(literal Literal) (string, error) {
 	return "", fmt.Errorf("literal not hashable %d", literal.LiteralType)
 }
 
-func NewFFIMap(val any) FFIMap {
-	return FFIMap{reflect.ValueOf(val)}
+func NewFFIMap(val any) *FFIMap {
+	return &FFIMap{reflect.ValueOf(val)}
 }
