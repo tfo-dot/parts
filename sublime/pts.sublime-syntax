@@ -12,7 +12,11 @@ contexts:
       scope: punctuation.definition.string.begin.parts
       push: string_double
 
-    - match: '\b(false|if|let|true|fun|return|else|static|for|class|break|continue|import|from|as)\b'
+    - match: '`'
+      scope: punctuation.definition.string.begin.parts
+      push: string_backtick
+
+    - match: '\b(false|if|let|true|fun|return|else|static|for|class|break|continue|import|from|as|syntax|raise)\b'
       scope: keyword.control.parts
 
     - match: '\b(PLUS|MINUS|SLASH|STAR|SEMICOLON|COLON|DOT|COMMA|LEFT_PAREN|RIGHT_PAREN|LEFT_BRACE|RIGHT_BRACE|LEFT_BRACKET|RIGHT_BRACKET|AT|EQUALS|OBJ_START|OBJ_END|META|EQUALITY)\b'
@@ -41,4 +45,13 @@ contexts:
       scope: punctuation.definition.string.end.parts
       pop: true
     - match: '[^"]+'
+      scope: string.quoted.double.parts
+  string_backtick:
+    - meta_scope: string.quoted.double.parts
+    - match: '\\`'
+      scope: constant.character.escape.parts
+    - match: '`'
+      scope: punctuation.definition.string.end.parts
+      pop: true
+    - match: '[^`]+'
       scope: string.quoted.double.parts

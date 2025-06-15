@@ -163,3 +163,9 @@ func (env *VMEnviroment) Append(other *VMEnviroment) {
 	deepestEnv.Enclosing = env.Enclosing
 	env.Enclosing = other
 }
+
+func (env *VMEnviroment) PartsObject() PartsObject {
+	return PartsObject{
+		Entries: env.Values,
+	}
+}

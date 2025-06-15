@@ -19,30 +19,103 @@ func main() {
 			os.Exit(1)
 		}
 
-		_, err = parts.RunString(string(stdinBytes))
+		var (
+			part   string
+			decomp bool
+		)
 
-		if err != nil {
-			panic(err)
+		flag.StringVar(&part, "part", "", "Path to syntax part")
+		flag.BoolVar(&decomp, "decomp", false, "Show decompiled")
+		flag.Parse()
+
+		if decomp {
+			p := parts.GetParserWithSource(string(stdinBytes), "./")
+
+			btc, err := p.ParseAll()
+
+			if err != nil {
+				panic(err)
+			}
+
+			fmt.Printf("%v", btc)
+			return
+		}
+
+		if part == "" {
+			_, err := parts.RunString(string(stdinBytes), "./")
+
+			if err != nil {
+				panic(err)
+			}
+		} else {
+			rawFile, err := os.ReadFile(part)
+
+			if err != nil {
+				panic(err)
+			}
+
+			_, err = parts.RunStringWithSyntax(string(stdinBytes), string(rawFile), "./")
+
+			if err != nil {
+				panic(err)
+			}
 		}
 
 		return
 	} else {
 		var (
-			code string
+			codePath string
+			part     string
+			decomp   bool
 		)
 
-		flag.StringVar(&code, "code", "", "Code to execute")
+		flag.StringVar(&codePath, "code", "", "Path to code to execute")
+		flag.StringVar(&part, "part", "", "Path to syntax part")
+		flag.BoolVar(&decomp, "decomp", false, "Show decompiled")
 		flag.Parse()
 
-		if code == "" {
+		if codePath == "" {
 			fmt.Println("Error: --code flag is required.")
 			os.Exit(1)
 		}
 
-		_, err := parts.RunString(code)
+		codeData, err := os.ReadFile(codePath)
 
 		if err != nil {
 			panic(err)
+		}
+
+		if decomp {
+			p := parts.GetParserWithSource(string(codeData), codePath)
+
+			btc, err := p.ParseAll()
+
+			if err != nil {
+				panic(err)
+			}
+
+			fmt.Printf("%v", btc)
+			return
+		}
+
+		if part == "" {
+			_, err := parts.RunString(string(codeData), codePath)
+
+			if err != nil {
+				panic(err)
+			}
+		} else {
+			rawFile, err := os.ReadFile(part)
+
+			if err != nil {
+				panic(err)
+			}
+
+			_, err = parts.RunStringWithSyntax(string(codeData), string(rawFile), codePath)
+
+			if err != nil {
+				panic(err)
+			}
 		}
 	}
 }

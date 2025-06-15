@@ -3,6 +3,8 @@ package parts
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path"
 	"strconv"
 	"strings"
 	"unicode"
@@ -95,9 +97,9 @@ func GetScannerRules() []ScannerRule {
 			},
 			Mappings: map[string]string{
 				"false": "", "if": "", "let": "", "true": "",
-				"fun": "", "return": "", "else": "", "static": "",
-				"for": "", "class": "", "break": "", "continue": "",
+				"fun": "", "return": "", "else": "", "for": "",
 				"import": "", "from": "", "as": "", "syntax": "",
+				"use": "", "raise": "", "break": "",
 			},
 		},
 		{
@@ -130,7 +132,39 @@ func GetScannerRules() []ScannerRule {
 					return []Token{}, errors.New("got unexpected token expected '\"' or '`' charater")
 				}
 
-				token.Value = token.Value[1 : len(runs)-1]
+				content := runs[1 : len(runs)-1]
+
+				var unescaped []rune
+				for i := 0; i < len(content); i++ {
+					if content[i] == '\\' {
+						if i+1 >= len(content) {
+							return []Token{}, errors.New("got unterminated escape sequence")
+						}
+						switch content[i+1] {
+						case '"':
+							unescaped = append(unescaped, '"')
+						case '\\':
+							unescaped = append(unescaped, '\\')
+						case 'n':
+							unescaped = append(unescaped, '\n')
+						case 't':
+							unescaped = append(unescaped, '\t')
+						case 'r':
+							unescaped = append(unescaped, '\r')
+						case 'b':
+							unescaped = append(unescaped, '\b')
+						case 'f':
+							unescaped = append(unescaped, '\f')
+						default:
+							return []Token{}, fmt.Errorf("invalid escape sequence: \\%c", content[i+1])
+						}
+
+						i++
+					} else {
+						unescaped = append(unescaped, content[i])
+					}
+				}
+				token.Value = unescaped
 
 				return []Token{token}, nil
 			},
@@ -202,7 +236,7 @@ func GetParserRules() []ParserRule {
 					return []Bytecode{}, errors.New("expected '}' after syntax body")
 				}
 
-				vm, err := GetVMWithSource(stringLiteral.Value.(string))
+				vm, err := GetVMWithSource(stringLiteral.Value.(string), p.ModulePath)
 
 				if err != nil {
 					return []Bytecode{}, errors.Join(errors.New("got error when parsing syntax block code"), err)
@@ -223,6 +257,198 @@ func GetParserRules() []ParserRule {
 				}
 
 				return []Bytecode{}, nil
+			},
+		},
+		{
+			Id:           "ImportStmt",
+			AdvanceToken: true,
+			Rule:         func(p *Parser) bool { return p.check(TokenKeyword, "IMPORT") },
+			Parse: func(p *Parser) ([]Bytecode, error) {
+				if p.matchKeyword("SYNTAX") {
+					if !p.matchKeyword("FROM") {
+						return []Bytecode{}, errors.New("expected 'from' keyword after import syntax")
+					}
+
+					tempBytecode, err := p.parseWithRule("ParseStr")
+
+					if err != nil {
+						return []Bytecode{}, err
+					}
+
+					if tempBytecode[0] != B_LITERAL {
+						return []Bytecode{}, errors.New("expected string literal")
+					}
+
+					tempBytecode = tempBytecode[1:]
+					stringIdx := -1
+
+					switch tempBytecode[0] {
+					case 126:
+						stringIdx = int(tempBytecode[1])<<8 | int(tempBytecode[2])
+					case 127:
+						stringIdx = int(tempBytecode[1])<<56 | int(tempBytecode[2])<<48 |
+							int(tempBytecode[3])<<40 | int(tempBytecode[4])<<32 |
+							int(tempBytecode[5])<<24 | int(tempBytecode[6])<<16 |
+							int(tempBytecode[7])<<8 | int(tempBytecode[8])
+					default:
+						stringIdx = int(tempBytecode[0])
+					}
+
+					if stringIdx == -1 {
+						return []Bytecode{}, errors.New("expected string literal")
+					}
+
+					stringLiteral := p.Literals[stringIdx]
+
+					if stringLiteral.LiteralType != StringLiteral {
+						return []Bytecode{}, errors.New("expected string literal")
+					}
+
+					source := stringLiteral.Value.(string)
+
+					if !p.matchKeyword("AS") {
+						return []Bytecode{}, errors.New("expected 'as' keyword after import path")
+					}
+
+					identifierToken, err := p.advance()
+
+					if err != nil {
+						return []Bytecode{}, errors.Join(errors.New("got error while advancing token"), err)
+					}
+
+					if identifierToken.Type != TokenIdentifier {
+						return []Bytecode{}, fmt.Errorf("got invalid token instead of identifier ( %d )", identifierToken.Type)
+					}
+
+					literalCode, err := p.AppendLiteral(Literal{
+						LiteralType: RefLiteral,
+						Value:       ReferenceDeclaration{Reference: string(identifierToken.Value), Dynamic: false},
+					})
+
+					rawFile, err := os.ReadFile(path.Join(p.ModulePath, source))
+
+					if err != nil {
+						return []Bytecode{}, errors.Join(errors.New("got error while reading foreign module file"), err)
+					}
+
+					literalIdx, err := p.AppendLiteral(Literal{
+						LiteralType: ParsedObjLiteral,
+						Value: PartsSpecialObject{Internal: &PartsObject{
+							Entries: map[string]*Literal{
+								"RTUse": {FunLiteral, NativeMethod{
+									Args: []string{"code"},
+									Body: func(vm *VM, args []*Literal) error {
+
+										if len(args) < 1 {
+											return nil
+										}
+
+										if args[0].LiteralType != StringLiteral {
+											return nil
+										}
+
+										newVm, err := RunStringWithSyntax(args[0].Value.(string), string(rawFile), p.ModulePath)
+
+										if err != nil {
+											return errors.Join(errors.New("got error while running syntax"), err)
+										}
+
+										vm.ReturnValue = newVm.LastExpr
+
+										return nil
+									},
+								}},
+							},
+						}, Hash: "Parts.Syntax"},
+					})
+
+					if err != nil {
+						return []Bytecode{}, errors.Join(errors.New("got error while encoding length"), err)
+					}
+
+					return append(append([]Bytecode{B_DECLARE}, literalCode...), literalIdx...), nil
+				}
+
+				return []Bytecode{}, nil
+			},
+		},
+		{
+			Id:           "UseExpr",
+			AdvanceToken: true,
+			Rule:         func(p *Parser) bool { return p.check(TokenKeyword, "USE") },
+			Parse: func(p *Parser) ([]Bytecode, error) {
+				tempBytecode, err := p.parseWithRule("ParseGroup")
+
+				if err != nil {
+					return []Bytecode{}, err
+				}
+
+				if tempBytecode[0] != B_LITERAL {
+					return []Bytecode{}, errors.New("expected string literal")
+				}
+
+				objCode := tempBytecode
+
+				if !p.matchOperator("LEFT_BRACE") {
+					return []Bytecode{}, errors.New("expected '{' after use obj")
+				}
+
+				tempBytecode, err = p.parseWithRule("ParseStr")
+
+				if err != nil {
+					return []Bytecode{}, err
+				}
+
+				if tempBytecode[0] != B_LITERAL {
+					return []Bytecode{}, errors.New("expected string literal")
+				}
+
+				stringRef := tempBytecode
+
+				tempBytecode = tempBytecode[1:]
+				stringIdx := -1
+
+				if tempBytecode[0] <= 125 {
+					stringIdx = int(tempBytecode[0])
+				}
+
+				if tempBytecode[0] == 126 {
+					stringIdx = int(tempBytecode[1])<<8 | int(tempBytecode[2])
+				}
+
+				if tempBytecode[0] == 127 {
+					stringIdx = int(tempBytecode[1])<<56 | int(tempBytecode[2])<<48 |
+						int(tempBytecode[3])<<40 | int(tempBytecode[4])<<32 |
+						int(tempBytecode[5])<<24 | int(tempBytecode[6])<<16 |
+						int(tempBytecode[7])<<8 | int(tempBytecode[8])
+				}
+
+				if stringIdx == -1 {
+					return []Bytecode{}, errors.New("expected string literal")
+				}
+
+				stringLiteral := p.Literals[stringIdx]
+
+				if stringLiteral.LiteralType != StringLiteral {
+					return []Bytecode{}, errors.New("expected string literal")
+				}
+
+				if !p.matchOperator("RIGHT_BRACE") {
+					return []Bytecode{}, errors.New("expected '}' after use code")
+				}
+
+				useIdx, err := p.AppendLiteral(Literal{LiteralType: RefLiteral,
+					Value: ReferenceDeclaration{
+						Reference: "Use",
+						Dynamic:   false,
+					},
+				})
+
+				if err != nil {
+					return []Bytecode{}, err
+				}
+
+				return append(append(append(append([]Bytecode{B_CALL, B_DOT}, objCode...), useIdx...), 1), stringRef...), nil
 			},
 		},
 		{
@@ -402,7 +628,7 @@ func GetParserRules() []ParserRule {
 						return []Bytecode{}, errors.Join(errors.New("encountered err in function body"), err)
 					}
 
-					declaration.Body = append(append(declaration.Body, B_RETURN), expr...)
+					declaration.Body = append([]Bytecode{B_RETURN}, expr...)
 				} else {
 					body, err := p.parseWithRule("BlockExpr")
 
@@ -466,6 +692,80 @@ func GetParserRules() []ParserRule {
 			},
 		},
 		{
+			Id:           "ForExpr",
+			AdvanceToken: true,
+			Rule:         func(p *Parser) bool { return p.check(TokenKeyword, "FOR") },
+			Parse: func(p *Parser) ([]Bytecode, error) {
+				var loopCondition []Bytecode
+
+				if p.check(TokenOperator, "LEFT_PAREN") {
+					btc, err := p.parse()
+
+					if err != nil {
+						return []Bytecode{}, errors.Join(errors.New("got error while parsing loop condition"), err)
+					}
+
+					loopCondition = btc
+				}
+
+				if len(loopCondition) == 0 {
+					loopCondition = []Bytecode{B_LITERAL, 1}
+				}
+
+				forBody, err := p.parse()
+
+				if err != nil {
+					return []Bytecode{}, errors.Join(errors.New("got error while parsing loop body"), err)
+				}
+
+				bodyLength, err := encodeLen(len(forBody))
+
+				if err != nil {
+					return []Bytecode{}, errors.Join(errors.New("got error while encoding length expression (encoding for body)"), err)
+				}
+
+				tempReverseJump, err := encodeLen(len(loopCondition) + len(forBody) + len(bodyLength))
+
+				if err != nil {
+					return []Bytecode{}, errors.Join(errors.New("got error while encoding length expression (encoding reverse jump length)"), err)
+				}
+
+				bodyLength, err = encodeLen(len(forBody) + len(tempReverseJump) + 1)
+
+				if err != nil {
+					return []Bytecode{}, errors.Join(errors.New("got error while encoding length expression (encoding for body - 2 pass)"), err)
+				}
+
+				tempReverseJump, err = encodeLen(len(loopCondition) + len(forBody) + len(bodyLength))
+
+				if err != nil {
+					return []Bytecode{}, errors.Join(errors.New("got error while encoding length expression (encoding reverse jump length - 2 pass)"), err)
+				}
+
+				bodyLength, err = encodeLen(len(forBody) + len(tempReverseJump) + 1)
+
+				if err != nil {
+					return []Bytecode{}, errors.Join(errors.New("got error while encoding length expression (encoding for body - 3 pass)"), err)
+				}
+
+				tempReverseJump, err = encodeLen(len(loopCondition) + len(forBody) + len(bodyLength))
+
+				if err != nil {
+					return []Bytecode{}, errors.Join(errors.New("got error while encoding length expression (encoding reverse jump length - 3 pass)"), err)
+				}
+
+				return append(append(append(append(append(append([]Bytecode{B_COND_JUMP}, loopCondition...), bodyLength...), forBody...), B_JUMP_REV), tempReverseJump...), 0), nil
+			},
+		},
+		{
+			Id: "Break",
+			AdvanceToken: true,
+			Rule:         func(p *Parser) bool { return p.check(TokenKeyword, "BREAK") },
+			Parse: func(p *Parser) ([]Bytecode, error) {
+				return []Bytecode{B_RETURN}, nil
+			},
+		},
+		{
 			Id:           "BlockExpr",
 			AdvanceToken: true,
 			Rule:         func(p *Parser) bool { return p.check(TokenOperator, "LEFT_BRACE") },
@@ -511,6 +811,20 @@ func GetParserRules() []ParserRule {
 				}
 
 				return append([]Bytecode{B_RETURN}, expr...), nil
+			},
+		},
+		{
+			Id:           "RaiseExpr",
+			AdvanceToken: true,
+			Rule:         func(p *Parser) bool { return p.check(TokenKeyword, "RAISE") },
+			Parse: func(p *Parser) ([]Bytecode, error) {
+				expr, err := p.parse()
+
+				if err != nil {
+					return []Bytecode{}, errors.Join(errors.New("got error while parsing return value"), err)
+				}
+
+				return append([]Bytecode{B_RAISE}, expr...), nil
 			},
 		},
 		{
@@ -699,18 +1013,26 @@ func GetParserRules() []ParserRule {
 			Parse: func(p *Parser) ([]Bytecode, error) {
 				elements := make([][]Bytecode, 0)
 
-				for cond := true; cond; cond = p.matchOperator("COMMA") {
-					elt, err := p.parse()
+				if !p.matchOperator("RIGHT_BRACKET") {
+					for {
+						elt, err := p.parse()
 
-					if err != nil {
-						return []Bytecode{}, errors.Join(errors.New("expected expression, got error"), err)
+						if err != nil {
+							return []Bytecode{}, errors.Join(errors.New("expected expression, got error"), err)
+						}
+
+						elements = append(elements, elt)
+
+						if !p.matchOperator("COMMA") {
+							break
+						}
 					}
 
-					elements = append(elements, elt)
-				}
+					if !p.matchOperator("RIGHT_BRACKET") {
+						tok, _ := p.peek()
 
-				if !p.matchOperator("RIGHT_BRACKET") {
-					return []Bytecode{}, errors.New("expected ']' after array elements")
+						return []Bytecode{}, fmt.Errorf("expected ']' after array elements, got %s", string(tok.Value))
+					}
 				}
 
 				literalIdx, err := p.AppendLiteral(Literal{

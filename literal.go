@@ -756,6 +756,10 @@ func (ffi *FFIMap) HasByKey(key string) bool {
 	return ffi.Entries.MapIndex(reflect.ValueOf(keyParsed)).IsValid()
 }
 
+func (ffi *FFIMap) TypeHash() string {
+	return ""
+}
+
 func returnExpected(key string) any {
 	switch key[0:2] {
 	case "IT":

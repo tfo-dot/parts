@@ -1,0 +1,65 @@
+ClearScanner()
+ClearParser()
+
+AddScannerRule( |>
+  Result: TokenKeyword,
+  BaseRule: fun(r) {
+    return ((r >= "a") * (r <= "z")) + ((r >= "A") * (r <= "Z")) + (r == "_")
+  },
+  Process: fun(mappings, runs) {
+      if (Object.Has)(mappings, runs) {
+    return |> Type: TokenKeyword, Value: mappings[runs] <|
+      } else {
+        return |> Type: TokenIdentifier, Value: runs <|
+      }
+  },
+  Mappings: |> "false": "FALSE_CRINGE_KW", "true": "TRUE_CRINGE_KW" <|
+<| )
+
+ AddScannerRule( |>
+  Result: TokenSpace,
+  Skip: true,
+  BaseRule: fun(r) { return r == " " }
+<| )
+
+AddParserRule(false, |>
+  Id: "PFalse",
+  AdvanceToken: true,
+  Rule: fun(p) {
+    return ParserCheck(p, TokenKeyword, "FALSE_CRINGE_KW")
+  },
+  Parse: fun(p) {
+    "Literal at 0 - false"
+    return [2, 0]
+  }
+<| )
+
+AddParserRule(false, |>
+  Id: "PTrue",
+  AdvanceToken: true,
+  Rule: fun(p) {
+    return ParserCheck(p, TokenKeyword, "TRUE_CRINGE_KW")
+  },
+  Parse: fun(p) {
+  "Literal at 0 - false"
+    return [2, 1]
+  }
+<| )
+
+AddParserRule(true, |>
+  Id: "NullTerminator",
+  AdvanceToken: true,
+    Rule: fun(p) {
+      return ParserCheck(p, TokenIdentifier, "null")
+    },
+    Parse: fun(p, btc) {
+      let var = ParserAppendLiteral(p, |>
+        LiteralType: RefLiteral,
+        Value: |> Reference: "printLn", Dynamic: false <|
+      <| )
+
+      let x = ((Array.AppendAll)([7], var)) + 1
+
+      return (Array.AppendAll)( x, btc )
+    }
+<| )

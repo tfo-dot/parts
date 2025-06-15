@@ -1,0 +1,182 @@
+ClearScanner()
+ClearParser()
+
+AddScannerRule( |>
+  Result: TokenKeyword,
+  BaseRule: fun(r) {
+    return ((r >= "a") * (r <= "z")) + ((r >= "A") * (r <= "Z")) + (r == "_")
+  },
+  Process: fun(mappings, runs) {
+      if (Object.Has)(mappings, runs) {
+    	return |> Type: TokenKeyword, Value: mappings[runs] <|
+      } else {
+        return |> Type: TokenIdentifier, Value: runs <|
+      }
+  },
+  Mappings: |> "false": "FALSE", "true": "TRUE", "null": "NULL" <|
+<| )
+
+ AddScannerRule( |>
+  Result: TokenSpace,
+  Skip: true,
+  BaseRule: fun(r) { return r == " " + r == "\n" + r == "\r" + r == "\t" }
+<| )
+
+ AddScannerRule( |>
+ 	Result: TokenString,
+ 	BaseRule: fun (r) = true,
+ 	Rule: fun (runs) {
+ 		return (((String.Length)(runs)) == 1) + (((String.At)(runs, ((String.Length)(runs))-1) == `"`) == false)
+ 	},
+ 	Process: fun(mappings, runs) {
+ 		if ((Strings.At)(runs, 0)) == `"` * ((((String.At)(runs, ((String.Length)(runs))-1)) == `"`) == false) {
+ 			raise "unterminated string"
+ 		}
+
+ 		return [|> LiteralType: TokenString, Value: Strings.Substring(runs, 1, ((String.Length)(runs))-1) <|]
+  	}
+ <| )
+
+ AddScannerRule( |>
+	Result:   TokenNumber,
+	BaseRule: fun (r) = r >= "0" * r <= "9"
+<| )
+
+AddScannerRule( |>
+	Result: TokenOperator,
+	Process: fun (mappings, runs) {
+      if (Object.Has)(mappings, runs) {
+    	return |> Type: TokenKeyword, Value: mappings[runs] <|
+      } else {
+        raise "invalid operator"
+      }
+	},
+	ValidChars: ["{},:[]"],
+	Mappings: |>
+		"{": "LEFT_BRACE", "}": "RIGHT_BRACE",
+		"[": "LEFT_BRACKET", "]": "RIGHT_BRACKET",
+		":": "COLON", ",": "COMMA"
+	<|
+<| )
+
+AddParserRule(false, |>
+  Id: "PFalse",
+  AdvanceToken: true,
+  Rule: fun(p) {
+    return ParserCheck(p, TokenKeyword, "FALSE")
+  },
+  Parse: fun(p) {
+    "Literal at 0 - false"
+    return [2, 0]
+  }
+<| )
+
+AddParserRule(false, |>
+  Id: "PTrue",
+  AdvanceToken: true,
+  Rule: fun(p) {
+    return ParserCheck(p, TokenKeyword, "TRUE")
+  },
+  Parse: fun(p) {
+  "Literal at 0 - false"
+    return [2, 1]
+  }
+<| )
+
+AddParserRule(false, |>
+	Id: "ParseStr",
+	Rule: fun(p) {
+		return (ParserPeek(p)).Type == TokenString
+	},
+	Parse: fun(p) {
+      	return (ParserAppendLiteral(p, |>
+      	    LiteralType: StringLiteral,
+      	    Value: (ParserAdvance(p)).Value
+      	<| ))
+	}
+<| )
+
+AddParserRule(false, |>
+	Id: "ParseNum",
+	Rule: fun(p) {
+		return (ParserPeek(p)).Type == TokenNumber
+	},
+	Parse: fun(p) {
+      	return (ParserAppendLiteral(p, |>
+      	    LiteralType: IntLiteral,
+      	    Value: (Int.Parse)((ParserAdvance(p)).Value)
+      	<| ))
+	}
+<| )
+
+AddParserRule(false, |>
+	Id: "ParseObj",
+	AdvanceToken: true,
+	Rule: fun (p) = ParserCheck(p, TokenOperator, "LEFT_BRACE"),
+	Parse: fun (p) {
+		let entries = [ ]
+
+		if (ParserMatch(TokenOperator, "RIGHT_BRACE")) {
+			for {
+				let entry = [ (ParserParse(p)) ]
+
+				if ((ParserMatch(TokenOperator, "COLON")) == false) {
+					raise "expected colon to separate key and value"
+				}
+
+
+				entry = (Array.AppendAll)(entry, (ParserParse(p)))
+
+				entries = (Array.Append)(entries, entry)
+
+				if ((ParserMatch(TokenOperator, "COMMA")) == false) {
+					break
+				}
+			}
+
+			if (ParserMatch(TokenOperator, "RIGHT_BRACE")) {
+				raise "expected closing operator for object"
+			}
+		}
+
+		let var = ParserAppendLiteral(p, |>
+	        LiteralType: ObjLiteral,
+	        Value: entries
+      	<| )
+
+      	return var
+	}
+<| )
+
+AddParserRule(false, |>
+	Id: "ParseArr",
+	AdvanceToken: true,
+	Rule: fun (p) = ParserCheck(p, TokenOperator, "LEFT_BRACKET"),
+	Parse: fun (p) {
+
+		let entries = [ ]
+
+		if ((ParserMatch(TokenOperator, "RIGHT_BRACKET")) == false) {
+			for {
+				let entry = [ (ParserParse(p)) ]
+
+				entries = (Array.Append)(entries, entry)
+
+				if ((ParserMatch(TokenOperator, "COMMA")) == false) {
+					break
+				}
+			}
+
+			if (ParserMatch(TokenOperator, "RIGHT_BRACKET")) {
+				raise "expected closing operator for object"
+			}
+		}
+
+		let var = ParserAppendLiteral(p, |>
+	        LiteralType: ListLiteral,
+	        Value: entries
+      	<| )
+
+      	return var
+	}
+<| )

@@ -1,0 +1,13 @@
+import syntax from "./syntax.pts" as t
+
+let tv = use (t) {`true`}
+
+if tv {
+	printLn("Yeah of course it's true")
+}
+
+let fv = use (t) {`false`}
+
+if fv == false {
+	printLn("Yeah of course it's false")
+}

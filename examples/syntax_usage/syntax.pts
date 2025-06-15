@@ -1,0 +1,47 @@
+ClearScanner()
+ClearParser()
+
+AddScannerRule( |>
+  Result: TokenKeyword,
+  BaseRule: fun(r) {
+    return ((r >= "a") * (r <= "z")) + ((r >= "A") * (r <= "Z")) + (r == "_")
+  },
+  Process: fun(mappings, runs) {
+      if (Object.Has)(mappings, runs) {
+    return |> Type: TokenKeyword, Value: mappings[runs] <|
+      } else {
+        return |> Type: TokenIdentifier, Value: runs <|
+      }
+  },
+  Mappings: |> "false": "FALSE", "true": "TRUE" <|
+<| )
+
+ AddScannerRule( |>
+  Result: TokenSpace,
+  Skip: true,
+  BaseRule: fun(r) { return r == " " }
+<| )
+
+AddParserRule(false, |>
+  Id: "PFalse",
+  AdvanceToken: true,
+  Rule: fun(p) {
+    return ParserCheck(p, TokenKeyword, "FALSE")
+  },
+  Parse: fun(p) {
+    "Literal at 0 - false"
+    return [2, 0]
+  }
+<| )
+
+AddParserRule(false, |>
+  Id: "PTrue",
+  AdvanceToken: true,
+  Rule: fun(p) {
+    return ParserCheck(p, TokenKeyword, "TRUE")
+  },
+  Parse: fun(p) {
+  "Literal at 0 - false"
+    return [2, 1]
+  }
+<| )

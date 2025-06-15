@@ -13,6 +13,7 @@ type VM struct {
 	ReturnValue *Literal
 	LastExpr    *Literal
 	EarlyExit   bool
+	JumpOffset  int
 
 	//Filled from parser
 	Code     []Bytecode
@@ -394,7 +395,28 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 
 		vm.EarlyExit = true
 
-		return NoValue, nil, err
+		return NoValue, nil, nil
+	case B_RAISE:
+		vm.Idx++
+
+		exprType, val, err := vm.runExpr(true)
+
+		if err != nil {
+			return UndefinedExpression, nil, errors.Join(errors.New("got error while running variable value"), err)
+		}
+
+		if exprType != TypeLiteral {
+			return UndefinedExpression, nil, errors.New("expected literal as variable name")
+		}
+
+		vm.ReturnValue = &Literal{ParsedObjLiteral, &PartsSpecialObject{
+			Internal: &PartsObject{Entries: map[string]*Literal{"RTValue": val.(*Literal)}},
+			Hash:     "Result.Error",
+		}}
+
+		vm.EarlyExit = true
+
+		return NoValue, nil, nil
 	case B_CALL:
 		vm.Idx++
 		exprType, expr, err := vm.runExpr(true)
@@ -414,7 +436,7 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 		}
 
 		if resolvedExpr.LiteralType != FunLiteral {
-			return UndefinedExpression, nil, fmt.Errorf("expected function value got %d", resolvedExpr.LiteralType)
+			return UndefinedExpression, nil, fmt.Errorf("expected function value got %d (%s)", resolvedExpr.LiteralType, resolvedExpr.pretify())
 		}
 
 		funcObj := resolvedExpr.Value.(PartsCallable)
@@ -491,7 +513,11 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 			return UndefinedExpression, nil, fmt.Errorf("expected value got %d (resolve jump condition)", exprType)
 		}
 
-		lit := jumpVal.(*Literal)
+		lit, err := vm.simplifyLiteral(jumpVal.(*Literal), true)
+
+		if err != nil {
+			return UndefinedExpression, nil, errors.Join(errors.New("got error while running jump condition"), err)
+		}
 
 		if lit.LiteralType != BoolLiteral {
 			return UndefinedExpression, nil, fmt.Errorf(
@@ -517,6 +543,16 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 				return UndefinedExpression, nil, errors.Join(errors.New("got error while running then branch"), err)
 			}
 
+			if tempVM.JumpOffset != 0 {
+				println("before jump", vm.Idx)
+
+				println("jump", tempVM.JumpOffset)
+				vm.Idx += tempVM.JumpOffset
+
+				println("after jump", vm.Idx)
+
+			}
+
 			if tempVM.EarlyExit {
 				vm.Idx = len(vm.Code)
 
@@ -538,7 +574,7 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 				return UndefinedExpression, nil, fmt.Errorf("got error while decoding length %d (else branch)", lit.LiteralType)
 			}
 
-			vm.Idx += length + 1
+			vm.Idx += length
 
 			if tempVM.ReturnValue == nil {
 				if tempVM.LastExpr != nil {
@@ -600,6 +636,35 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 				return TypeLiteral, tempVM.ReturnValue, nil
 			}
 		}
+	case B_JUMP:
+		vm.Idx++
+
+		temp := vm.Idx
+
+		offset, err := vm.decodeLen()
+
+		if err != nil {
+			return UndefinedExpression, nil, errors.Join(errors.New("got error while decoding jump distance"), err)
+		}
+
+		vm.JumpOffset = offset + (vm.Idx - temp)
+
+		return JumpStmt, nil, nil
+
+	case B_JUMP_REV:
+		vm.Idx++
+
+		temp := vm.Idx
+
+		offset, err := vm.decodeLen()
+
+		if err != nil {
+			return UndefinedExpression, nil, errors.Join(errors.New("got error while decoding reverse jump distance"), err)
+		}
+
+		vm.JumpOffset = -offset - (vm.Idx - temp)
+
+		return JumpStmt, nil, nil
 	default:
 		return UndefinedExpression, nil, fmt.Errorf("unrecognized bytecode: %d", vm.Code[vm.Idx])
 	}
@@ -671,6 +736,7 @@ const (
 	TypeLiteral
 	ScopeChange
 	DotExpression
+	JumpStmt
 )
 
 func (vm *VM) simplifyLiteral(literal *Literal, resolveRef bool) (*Literal, error) {
@@ -864,6 +930,7 @@ type PartsIndexable interface {
 
 	GetAll() map[string]*Literal
 	Length() int
+	TypeHash() string
 }
 
 type PartsObject struct {
@@ -921,4 +988,8 @@ func (o *PartsObject) SetByKey(key string, value *Literal) *Literal {
 func (o *PartsObject) HasByKey(key string) bool {
 	_, has := o.Entries[key]
 	return has
+}
+
+func (o *PartsObject) TypeHash() string {
+	return ""
 }

@@ -6,9 +6,9 @@ import (
 )
 
 func TestLetFalse(t *testing.T) {
-	parser := GetParserWithSource("let x = false;")
+	parser := GetParserWithSource("let x = false;", "./")
 
-	bytecode, err := parser.parseAll()
+	bytecode, err := parser.ParseAll()
 
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
@@ -21,7 +21,7 @@ func TestLetFalse(t *testing.T) {
 }
 
 func TestLetTrue(t *testing.T) {
-	parser := GetParserWithSource("let x = true;")
+	parser := GetParserWithSource("let x = true;", "./")
 
 	bytecode, err := parser.parse()
 
@@ -36,7 +36,7 @@ func TestLetTrue(t *testing.T) {
 }
 
 func TestLetNumber(t *testing.T) {
-	parser := GetParserWithSource("let x = 123;")
+	parser := GetParserWithSource("let x = 123;", "./")
 
 	bytecode, err := parser.parse()
 
@@ -53,7 +53,7 @@ func TestLetNumber(t *testing.T) {
 }
 
 func TestLetString(t *testing.T) {
-	parser := GetParserWithSource("let x = \"f\";")
+	parser := GetParserWithSource("let x = \"f\";", "./")
 
 	bytecode, err := parser.parse()
 
@@ -70,7 +70,7 @@ func TestLetString(t *testing.T) {
 }
 
 func TestParenthesis(t *testing.T) {
-	parser := GetParserWithSource("(1);")
+	parser := GetParserWithSource("(1);", "./")
 
 	bytecode, err := parser.parse()
 
@@ -83,7 +83,7 @@ func TestParenthesis(t *testing.T) {
 }
 
 func TestBlock(t *testing.T) {
-	parser := GetParserWithSource("{0};")
+	parser := GetParserWithSource("{0};", "./")
 
 	bytecode, err := parser.parse()
 
@@ -96,7 +96,7 @@ func TestBlock(t *testing.T) {
 }
 
 func TestAnonymousFunctionNoBody(t *testing.T) {
-	parser := GetParserWithSource("fun () {}")
+	parser := GetParserWithSource("fun () {}", "./")
 
 	bytecode, err := parser.parse()
 
@@ -109,7 +109,7 @@ func TestAnonymousFunctionNoBody(t *testing.T) {
 }
 
 func TestAnonymousFunctionWithBody(t *testing.T) {
-	parser := GetParserWithSource("fun () { 0 }")
+	parser := GetParserWithSource("fun () { 0 }", "./")
 
 	bytecode, err := parser.parse()
 
@@ -130,7 +130,7 @@ func TestAnonymousFunctionWithBody(t *testing.T) {
 }
 
 func TestNamedFunctionNoBody(t *testing.T) {
-	parser := GetParserWithSource("let x() {}")
+	parser := GetParserWithSource("let x() {}", "./")
 
 	bytecode, err := parser.parse()
 
@@ -143,7 +143,7 @@ func TestNamedFunctionNoBody(t *testing.T) {
 }
 
 func TestNamedFunctionWithBody(t *testing.T) {
-	parser := GetParserWithSource("let x() { 0 }")
+	parser := GetParserWithSource("let x() { 0 }", "./")
 
 	bytecode, err := parser.parse()
 
@@ -164,7 +164,7 @@ func TestNamedFunctionWithBody(t *testing.T) {
 }
 
 func TestNamedFunctionWithArg(t *testing.T) {
-	parser := GetParserWithSource("let x(one) { }")
+	parser := GetParserWithSource("let x(one) { }", "./")
 
 	bytecode, err := parser.parse()
 
@@ -195,7 +195,7 @@ func TestNamedFunctionWithArg(t *testing.T) {
 }
 
 func TestNamedFunctionWithTwoArg(t *testing.T) {
-	parser := GetParserWithSource("let x(one, two) { }")
+	parser := GetParserWithSource("let x(one, two) { }", "./")
 
 	bytecode, err := parser.parse()
 
@@ -231,7 +231,7 @@ func TestNamedFunctionWithTwoArg(t *testing.T) {
 }
 
 func TestNamedFunctionInline(t *testing.T) {
-	parser := GetParserWithSource("let x(one) = one")
+	parser := GetParserWithSource("let x(one) = one", "./")
 
 	bytecode, err := parser.parse()
 
@@ -282,7 +282,7 @@ func TestNamedFunctionInline(t *testing.T) {
 }
 
 func TestObjectDeclaration(t *testing.T) {
-	parser := GetParserWithSource("let x = |> <|")
+	parser := GetParserWithSource("let x = |> <|", "./")
 
 	bytecode, err := parser.parse()
 
@@ -299,7 +299,7 @@ func TestObjectDeclaration(t *testing.T) {
 }
 
 func TestObjectNoEntires(t *testing.T) {
-	parser := GetParserWithSource("|> <|")
+	parser := GetParserWithSource("|> <|", "./")
 
 	bytecode, err := parser.parse()
 
@@ -312,7 +312,7 @@ func TestObjectNoEntires(t *testing.T) {
 }
 
 func TestObjectWithIntEntry(t *testing.T) {
-	parser := GetParserWithSource("|> 1 : 0 <|")
+	parser := GetParserWithSource("|> 1 : 0 <|", "./")
 
 	_, err := parser.parse()
 
@@ -367,9 +367,9 @@ func TestObjectWithIntEntry(t *testing.T) {
 }
 
 func TestMeta(t *testing.T) {
-	parser := GetParserWithSource("#>\"random\": \"value\"")
+	parser := GetParserWithSource("#>\"random\": \"value\"", "./")
 
-	bytecode, err := parser.parseAll()
+	bytecode, err := parser.ParseAll()
 
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
@@ -387,8 +387,21 @@ func TestMeta(t *testing.T) {
 	}
 }
 
+func TestArrayNoEntry(t *testing.T) {
+	parser := GetParserWithSource("[]", "./")
+
+	bytecode, err := parser.parse()
+
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+
+	CheckBytecode(t, bytecode, []Bytecode{B_LITERAL, Bytecode(len(InitialLiterals))})
+}
+
 func TestArray(t *testing.T) {
-	parser := GetParserWithSource("[\"a\", 1]")
+	parser := GetParserWithSource("[\"a\", 1]", "./")
 
 	bytecode, err := parser.parse()
 
@@ -448,7 +461,7 @@ func TestArray(t *testing.T) {
 }
 
 func TestDotExpression(t *testing.T) {
-	parser := GetParserWithSource("val.key")
+	parser := GetParserWithSource("val.key", "./")
 
 	bytecode, err := parser.parse()
 
@@ -475,7 +488,7 @@ func TestDotExpression(t *testing.T) {
 }
 
 func TestDotNestedExpression(t *testing.T) {
-	parser := GetParserWithSource("(obj.val).key")
+	parser := GetParserWithSource("(obj.val).key", "./")
 
 	bytecode, err := parser.parse()
 
@@ -509,7 +522,7 @@ func TestDotNestedExpression(t *testing.T) {
 }
 
 func TestRefListAccess(t *testing.T) {
-	parser := GetParserWithSource("x[0]")
+	parser := GetParserWithSource("x[0]", "./")
 
 	bytecode, err := parser.parse()
 
@@ -536,7 +549,7 @@ func TestRefListAccess(t *testing.T) {
 }
 
 func TestFunCalSingleArg(t *testing.T) {
-	parser := GetParserWithSource("x(10)")
+	parser := GetParserWithSource("x(10)", "./")
 
 	bytecode, err := parser.parse()
 
@@ -563,7 +576,7 @@ func TestFunCalSingleArg(t *testing.T) {
 }
 
 func TestFunCallAssign(t *testing.T) {
-	parser := GetParserWithSource("let y = x(10)")
+	parser := GetParserWithSource("let y = x(10)", "./")
 
 	bytecode, err := parser.parse()
 
@@ -597,7 +610,7 @@ func TestFunCallAssign(t *testing.T) {
 }
 
 func TestFunCalMultipleArgs(t *testing.T) {
-	parser := GetParserWithSource("x(10, 20)")
+	parser := GetParserWithSource("x(10, 20)", "./")
 
 	bytecode, err := parser.parse()
 
@@ -631,7 +644,7 @@ func TestFunCalMultipleArgs(t *testing.T) {
 }
 
 func TestFunFieldCal(t *testing.T) {
-	parser := GetParserWithSource("x.y(10)")
+	parser := GetParserWithSource("x.y(10)", "./")
 
 	bytecode, err := parser.parse()
 
@@ -665,7 +678,7 @@ func TestFunFieldCal(t *testing.T) {
 }
 
 func TestFunFieldArrCal(t *testing.T) {
-	parser := GetParserWithSource("x[y](10)")
+	parser := GetParserWithSource("x[y](10)", "./")
 
 	bytecode, err := parser.parse()
 
@@ -699,9 +712,9 @@ func TestFunFieldArrCal(t *testing.T) {
 }
 
 func TestSetVarExpression(t *testing.T) {
-	parser := GetParserWithSource("x = 0")
+	parser := GetParserWithSource("x = 0", "./")
 
-	bytecode, err := parser.parseAll()
+	bytecode, err := parser.ParseAll()
 
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
@@ -726,7 +739,7 @@ func TestSetVarExpression(t *testing.T) {
 }
 
 func TestSetObjExpression(t *testing.T) {
-	parser := GetParserWithSource("obj.key = 10")
+	parser := GetParserWithSource("obj.key = 10", "./")
 
 	bytecode, err := parser.parse()
 
@@ -760,7 +773,7 @@ func TestSetObjExpression(t *testing.T) {
 }
 
 func TestSetObjIndexExpression(t *testing.T) {
-	parser := GetParserWithSource("obj[key] = 10")
+	parser := GetParserWithSource("obj[key] = 10", "./")
 
 	bytecode, err := parser.parse()
 
@@ -794,7 +807,7 @@ func TestSetObjIndexExpression(t *testing.T) {
 }
 
 func TestSetListExpression(t *testing.T) {
-	parser := GetParserWithSource("list[0] = 10")
+	parser := GetParserWithSource("list[0] = 10", "./")
 
 	bytecode, err := parser.parse()
 
@@ -828,7 +841,7 @@ func TestSetListExpression(t *testing.T) {
 }
 
 func TestSetDotListExpression(t *testing.T) {
-	parser := GetParserWithSource("list.0 = 10")
+	parser := GetParserWithSource("list.0 = 10", "./")
 
 	bytecode, err := parser.parse()
 
@@ -862,7 +875,7 @@ func TestSetDotListExpression(t *testing.T) {
 }
 
 func TestSetListDynamicExpression(t *testing.T) {
-	parser := GetParserWithSource("list[idx] = 10")
+	parser := GetParserWithSource("list[idx] = 10", "./")
 
 	bytecode, err := parser.parse()
 
@@ -896,7 +909,7 @@ func TestSetListDynamicExpression(t *testing.T) {
 }
 
 func TestSetListDotFieldExpression(t *testing.T) {
-	parser := GetParserWithSource("list.idx = 10")
+	parser := GetParserWithSource("list.idx = 10", "./")
 
 	bytecode, err := parser.parse()
 
@@ -930,7 +943,7 @@ func TestSetListDotFieldExpression(t *testing.T) {
 }
 
 func TestIfExpressionFull(t *testing.T) {
-	parser := GetParserWithSource("if false { return 0 } else { return 1 }")
+	parser := GetParserWithSource("if false { return 0 } else { return 1 }", "./")
 	bytecode, err := parser.parse()
 
 	if err != nil {
@@ -963,7 +976,7 @@ func TestIfExpressionFull(t *testing.T) {
 }
 
 func TestIfExpressionFullCursed(t *testing.T) {
-	parser := GetParserWithSource("if false return 0 else return 1")
+	parser := GetParserWithSource("if false return 0 else return 1", "./")
 	bytecode, err := parser.parse()
 
 	if err != nil {
@@ -996,7 +1009,68 @@ func TestIfExpressionFullCursed(t *testing.T) {
 }
 
 func TestIfExpressionNoElse(t *testing.T) {
-	parser := GetParserWithSource("if false { return 0 }")
+	parser := GetParserWithSource("if false { return 0 }", "./")
+	bytecode, err := parser.parse()
+
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+
+	condVal, _ := GetParserLiteral(parser, BoolLiteral, false)
+
+	if condVal == -1 {
+		t.Error("literal (Bool, false) wasn't present")
+		return
+	}
+
+	varVal, _ := GetParserLiteral(parser, IntLiteral, 0)
+
+	if varVal == -1 {
+		t.Error("literal (Int, 0) wasn't present")
+		return
+	}
+
+	CheckBytecode(t, bytecode, []Bytecode{B_COND_JUMP, B_LITERAL, Bytecode(condVal), 5, B_NEW_SCOPE, B_RETURN, B_LITERAL, Bytecode(varVal), B_END_SCOPE, 0})
+}
+
+func TestForNoCondition(t *testing.T) {
+	parser := GetParserWithSource("for { printLn(`x`) }", "./")
+	bytecode, err := parser.parse()
+
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+
+	condVal, _ := GetParserLiteral(parser, StringLiteral, "x")
+
+	if condVal == -1 {
+		t.Error("literal (String, 'x') wasn't present")
+		return
+	}
+
+	printLnVar, _ := GetParserLiteral(parser, RefLiteral, "printLn")
+
+	if printLnVar == -1 {
+		t.Error("literal (Ref, 'printLn') wasn't present")
+		return
+	}
+	//body length + reverse + reverse len
+	bLen := 8 + 1 + 1
+
+	//body length (- reverse - reverse len) + actual body length encoding + condition
+	rLen := bLen - (2) + 1 + 2
+
+	CheckBytecode(t, bytecode, []Bytecode{
+		B_COND_JUMP, B_LITERAL, 1,
+		Bytecode(bLen), B_NEW_SCOPE, B_CALL, B_LITERAL, Bytecode(printLnVar), 1, B_LITERAL, Bytecode(condVal), B_END_SCOPE, B_JUMP_REV, Bytecode(rLen),
+		0,
+	})
+}
+
+func TestForCondition(t *testing.T) {
+	parser := GetParserWithSource("if false { return 0 }", "./")
 	bytecode, err := parser.parse()
 
 	if err != nil {
@@ -1022,7 +1096,7 @@ func TestIfExpressionNoElse(t *testing.T) {
 }
 
 func TestMathAdd(t *testing.T) {
-	parser := GetParserWithSource("1 + 1")
+	parser := GetParserWithSource("1 + 1", "./")
 	bytecode, err := parser.parse()
 
 	if err != nil {
@@ -1041,7 +1115,7 @@ func TestMathAdd(t *testing.T) {
 }
 
 func TestMathSub(t *testing.T) {
-	parser := GetParserWithSource("1 - 1")
+	parser := GetParserWithSource("1 - 1", "./")
 	bytecode, err := parser.parse()
 
 	if err != nil {
@@ -1060,7 +1134,7 @@ func TestMathSub(t *testing.T) {
 }
 
 func TestMathMul(t *testing.T) {
-	parser := GetParserWithSource("1 * 1")
+	parser := GetParserWithSource("1 * 1", "./")
 	bytecode, err := parser.parse()
 
 	if err != nil {
@@ -1079,7 +1153,7 @@ func TestMathMul(t *testing.T) {
 }
 
 func TestMathDiv(t *testing.T) {
-	parser := GetParserWithSource("1 / 1")
+	parser := GetParserWithSource("1 / 1", "./")
 	bytecode, err := parser.parse()
 
 	if err != nil {
@@ -1098,7 +1172,7 @@ func TestMathDiv(t *testing.T) {
 }
 
 func TestOpEq(t *testing.T) {
-	parser := GetParserWithSource("1 == 1")
+	parser := GetParserWithSource("1 == 1", "./")
 	bytecode, err := parser.parse()
 
 	if err != nil {
@@ -1117,8 +1191,8 @@ func TestOpEq(t *testing.T) {
 }
 
 func TestSomeParsing(t *testing.T) {
-	parser := GetParserWithSource("let mult = 2; let res() = (10 * mult)")
-	bytecode, err := parser.parseAll()
+	parser := GetParserWithSource("let mult = 2; let res() = (10 * mult)", "./")
+	bytecode, err := parser.ParseAll()
 
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
@@ -1240,7 +1314,7 @@ func TestModdedParser(t *testing.T) {
 			    	<|
 		    	<| )
 
-		    	let x = ((Array.AppendAll)([7], var)) + 1
+		    	let x = ((Array.AppendAll)([8], var)) + 1
 
 		    	return (Array.AppendAll)( x, btc )
 		    }
@@ -1248,9 +1322,9 @@ func TestModdedParser(t *testing.T) {
 		`
 	source += "` } false null true null"
 
-	parser := GetParserWithSource(source)
+	parser := GetParserWithSource(source, "./")
 
-	bytecode, err := parser.parseAll()
+	bytecode, err := parser.ParseAll()
 
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)

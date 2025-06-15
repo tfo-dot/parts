@@ -79,6 +79,40 @@ func FillConsts(vm *VM, act *Parser) {
 		return p.check(tt, val)
 	})
 
+	vm.Enviroment.DefineFunction("ParserMatch", func(p *Parser, tt TokenType, val string) bool {
+		return p.match(tt, val)
+	})
+
+	vm.Enviroment.DefineFunction("ParserPeek", func(p *Parser) Token {
+		tok, err := p.peek()
+
+		if err != nil {
+			panic(err)
+		}
+
+		return tok
+	})
+
+	vm.Enviroment.DefineFunction("ParserAdvance", func(p *Parser) Token {
+		tok, err := p.advance()
+
+		if err != nil {
+			panic(err)
+		}
+
+		return tok
+	})
+
+	vm.Enviroment.DefineFunction("ParserParse", func(p *Parser) []Bytecode {
+		tok, err := p.parse()
+
+		if err != nil {
+			panic(err)
+		}
+
+		return tok
+	})
+
 	vm.Enviroment.DefineFunction("AddScannerRule", func(obj any) {
 		rule := ScannerRule{}
 

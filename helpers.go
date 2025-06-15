@@ -3,6 +3,7 @@ package parts
 import (
 	"errors"
 	"fmt"
+	"path"
 	"reflect"
 	"strings"
 )
@@ -11,7 +12,7 @@ func GetScannerWithSource(source string) Scanner {
 	return Scanner{Source: []rune(source), Rules: GetScannerRules()}
 }
 
-func GetParserWithSource(source string) Parser {
+func GetParserWithSource(source, modulePath string) Parser {
 	scanner := GetScannerWithSource(source)
 
 	return Parser{
@@ -21,13 +22,14 @@ func GetParserWithSource(source string) Parser {
 		Meta:      make(map[string]string),
 		Rules:     GetParserRules(),
 		PostFix:   GetPostFixRules(),
+		ModulePath: path.Dir(modulePath),
 	}
 }
 
-func GetVMWithSource(source string) (*VM, error) {
-	parser := GetParserWithSource(source)
+func GetVMWithSource(source string, path string) (*VM, error) {
+	parser := GetParserWithSource(source, path)
 
-	code, err := parser.parseAll()
+	code, err := parser.ParseAll()
 
 	if err != nil {
 		return nil, errors.Join(errors.New("got error from within parser"), err)
@@ -56,10 +58,64 @@ func GetVMWithSource(source string) (*VM, error) {
 	}, nil
 }
 
-func RunString(codeString string) (*VM, error) {
-	parser := GetParserWithSource(codeString)
+func RunString(codeString, modulePath string) (*VM, error) {
+	parser := GetParserWithSource(codeString, modulePath)
 
-	code, err := parser.parseAll()
+	code, err := parser.ParseAll()
+
+	if err != nil {
+		return nil, errors.Join(errors.New("got error from within parser"), err)
+	}
+
+	literals := make([]*Literal, len(parser.Literals))
+
+	for idx, literal := range parser.Literals {
+		literals[idx] = &literal
+	}
+
+	vmEnv := VMEnviroment{
+		Enclosing: nil,
+		Values:    StandardLibrary,
+	}
+
+	vm := VM{
+		Enviroment: &VMEnviroment{
+			Enclosing: &vmEnv,
+			Values:    make(map[string]*Literal),
+		},
+		Idx:      0,
+		Code:     code,
+		Literals: literals,
+		Meta:     parser.Meta,
+	}
+
+	err = vm.Run()
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &vm, nil
+}
+
+func RunStringWithSyntax(codeString, syntax, modulePath string) (*VM, error) {
+	syntaxVM, err := GetVMWithSource(syntax, modulePath)
+
+	if err != nil {
+		return nil, errors.Join(errors.New("got error when parsing syntax code"), err)
+	}
+
+	parser := GetParserWithSource(codeString, modulePath)
+
+	FillConsts(syntaxVM, &parser)
+
+	err = syntaxVM.Run()
+
+	if err != nil {
+		return nil, errors.Join(errors.New("got error while running syntax code"), err)
+	}
+
+	code, err := parser.ParseAll()
 
 	if err != nil {
 		return nil, errors.Join(errors.New("got error from within parser"), err)

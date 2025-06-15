@@ -12,11 +12,12 @@ type Parser struct {
 	Rules     []ParserRule
 	PostFix   []PostFixRule
 
-	Literals []Literal
-	Meta     map[string]string
+	Literals   []Literal
+	Meta       map[string]string
+	ModulePath string
 }
 
-func (p *Parser) parseAll() ([]Bytecode, error) {
+func (p *Parser) ParseAll() ([]Bytecode, error) {
 	bytecode := make([]Bytecode, 0)
 
 	for !(p.LastToken.Type == TokenInvalid && string(p.LastToken.Value) == "EOF") {
@@ -184,6 +185,7 @@ const (
 	B_SET
 	B_LITERAL
 	B_RETURN
+	B_RAISE
 	B_NEW_SCOPE
 	B_END_SCOPE
 	B_DOT
@@ -191,8 +193,8 @@ const (
 	B_RESOLVE
 	B_COND_JUMP
 	B_JUMP
+	B_JUMP_REV
 	B_BIN_OP
-	B_RULE_CHANGE
 )
 
 type BinOp Bytecode
@@ -205,6 +207,12 @@ const (
 	B_OP_EQ
 	B_OP_GT
 	B_OP_LT
+)
+
+type ImportType Bytecode
+
+const (
+	B_IMPORT_STX Bytecode = iota
 )
 
 type ReferenceDeclaration struct {

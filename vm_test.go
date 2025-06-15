@@ -12,7 +12,7 @@ func TestHelperNoTags(t *testing.T) {
 		Age  int
 	}
 
-	vm, err := GetVMWithSource("let Name = \"tfo\"; let Age = 22")
+	vm, err := GetVMWithSource("let Name = \"tfo\"; let Age = 22", "./")
 
 	if err != nil {
 		t.Error(err)
@@ -46,7 +46,7 @@ func TestHelperWithTags(t *testing.T) {
 		Age  int    `parts:"age"`
 	}
 
-	vm, err := GetVMWithSource("let name = \"tfo\"; let age = 22")
+	vm, err := GetVMWithSource("let name = \"tfo\"; let age = 22", "./")
 
 	if err != nil {
 		t.Error(err)
@@ -79,7 +79,7 @@ func TestHelperWithList(t *testing.T) {
 		Flags []int `parts:"flags"`
 	}
 
-	vm, err := GetVMWithSource("let flags = [1, 2, 4, 8]")
+	vm, err := GetVMWithSource("let flags = [1, 2, 4, 8]", "./")
 
 	if err != nil {
 		t.Error(err)
@@ -120,7 +120,7 @@ func TestHelperWithObject(t *testing.T) {
 		} `parts:"loot"`
 	}
 
-	vm, err := GetVMWithSource("let loot = |> exp: 100, gold: 200 <|")
+	vm, err := GetVMWithSource("let loot = |> exp: 100, gold: 200 <|", "./")
 
 	if err != nil {
 		t.Error(err)
@@ -175,7 +175,7 @@ func TestHelperJoined(t *testing.T) {
 		let Loot = [
 		  |> Type: 1,  Count: 130 <|,
 		  |> Type: 2, Count: 315 <|
-		]`)
+		]`, "./")
 
 	if err != nil {
 		t.Error(err)
@@ -240,7 +240,7 @@ func TestDotObj(t *testing.T) {
 
 	vm, err := GetVMWithSource(`
 		let obj = |> key: 123 <|
-		let Val = obj.key `)
+		let Val = obj.key `, "./")
 
 	if err != nil {
 		t.Error(err)
@@ -273,7 +273,7 @@ func TestDotList(t *testing.T) {
 	vm, err := GetVMWithSource(`
 		let obj = [10, 20]
 		let Val = obj.0
-	`)
+	`, "./")
 
 	if err != nil {
 		t.Error(err)
@@ -304,7 +304,7 @@ func TestDotListRef(t *testing.T) {
 
 	vm, err := GetVMWithSource(`let idx = 0
 		let obj = [10]
-		let Val = obj[idx]`)
+		let Val = obj[idx]`, "./")
 
 	if err != nil {
 		t.Error(err)
@@ -334,7 +334,7 @@ func TestDotListAccess(t *testing.T) {
 	}
 
 	vm, err := GetVMWithSource(`let obj = [10, 20]
-		let Val = obj[0]`)
+		let Val = obj[0]`, "./")
 
 	if err != nil {
 		t.Error(err)
@@ -364,7 +364,7 @@ func TestVarAssign(t *testing.T) {
 	}
 
 	vm, err := GetVMWithSource(`let num = 10
-		num = 15`)
+		num = 15`, "./")
 
 	if err != nil {
 		t.Error(err)
@@ -394,7 +394,7 @@ func TestArrayResolveAssign(t *testing.T) {
 	}
 
 	vm, err := GetVMWithSource(`let arr = [10, 20]
-		arr[0] = 15`)
+		arr[0] = 15`, "./")
 
 	if err != nil {
 		t.Error(err)
@@ -429,7 +429,7 @@ func TestArrayAssign(t *testing.T) {
 	}
 
 	vm, err := GetVMWithSource(`let arr = [10, 20]
-		arr.0 = 15`)
+		arr.0 = 15`, "./")
 
 	if err != nil {
 		t.Error(err)
@@ -466,7 +466,7 @@ func TestObjAssign(t *testing.T) {
 	}
 
 	vm, err := GetVMWithSource(`let obj = |> field: 10 <|
-		obj.field = 15`)
+		obj.field = 15`, "./")
 
 	if err != nil {
 		t.Error(err)
@@ -498,7 +498,7 @@ func TestObjResolveAssign(t *testing.T) {
 	vm, err := GetVMWithSource(`let key = "field" 
 		let obj = |> "field": 10 <|
 		obj[key] = 15
-		let res = obj[key]`)
+		let res = obj[key]`, "./")
 
 	if err != nil {
 		t.Error(err)
@@ -529,7 +529,7 @@ func TestFunctionCall(t *testing.T) {
 
 	vm, err := GetVMWithSource(`let GetRes(obj) = obj.res
 		let math = |> res: 10 <|
-		let res = GetRes(math)`)
+		let res = GetRes(math)`, "./")
 
 	if err != nil {
 		t.Error(err)
@@ -558,7 +558,7 @@ func TestIfFull(t *testing.T) {
 		Res int `parts:"res"`
 	}
 
-	vm, err := GetVMWithSource(`let res = if (true) { 10 } else { 1 }`)
+	vm, err := GetVMWithSource(`let res = if (true) { 10 } else { 1 }`, "./")
 
 	if err != nil {
 		t.Error(err)
@@ -587,7 +587,7 @@ func TestIfFullCursed(t *testing.T) {
 		Res int `parts:"res"`
 	}
 
-	vm, err := GetVMWithSource(`let res = if true 10 else 1`)
+	vm, err := GetVMWithSource(`let res = if true 10 else 1`, "./")
 
 	if err != nil {
 		t.Error(err)
@@ -616,7 +616,7 @@ func TestIfNoElse(t *testing.T) {
 		Res int `parts:"res"`
 	}
 
-	vm, err := GetVMWithSource(`let res = if (false) { 10 }`)
+	vm, err := GetVMWithSource(`let res = if (false) { 10 }`, "./")
 
 	if err != nil {
 		t.Error(err)
@@ -649,7 +649,7 @@ func TestMath(t *testing.T) {
 		Res int `parts:"res"`
 	}
 
-	vm, err := GetVMWithSource(`let res = 3 * ((10 + 10 + 5) - (2 * (1/1)))`)
+	vm, err := GetVMWithSource(`let res = 3 * ((10 + 10 + 5) - (2 * (1/1)))`, "./")
 
 	if err != nil {
 		t.Error(err)
@@ -678,7 +678,7 @@ func TestEq(t *testing.T) {
 		Res bool `parts:"res"`
 	}
 
-	vm, err := GetVMWithSource(`let res = true == true`)
+	vm, err := GetVMWithSource(`let res = true == true`, "./")
 
 	if err != nil {
 		t.Error(err)
@@ -720,7 +720,7 @@ func TestReadFile(t *testing.T) {
 
 	fileContent, err := os.ReadFile("./test_file.pts")
 
-	vm, err := RunString(string(fileContent))
+	vm, err := RunString(string(fileContent), "./")
 
 	if err != nil {
 		t.Error(err)
@@ -779,7 +779,7 @@ func TestReadFile(t *testing.T) {
 }
 
 func TestPrint(t *testing.T) {
-	vm, err := GetVMWithSource(`printLn("woah")`)
+	vm, err := GetVMWithSource(`printLn("woah")`, "./")
 
 	if err != nil {
 		t.Error(err)
@@ -800,7 +800,7 @@ func TestStructWithMissingFields(t *testing.T) {
 		Name string
 	}
 
-	vm, err := RunString("let fire = true; let Id = \"Simple_Id\"")
+	vm, err := RunString("let fire = true; let Id = \"Simple_Id\"", "./")
 
 	if err != nil {
 		t.Error(err)
@@ -838,7 +838,7 @@ func TestStructWithMissingFieldsEmpty(t *testing.T) {
 		Name string `parts:",ignoreEmpty"`
 	}
 
-	vm, err := RunString("let fire = true; let Id = \"Simple_Id\"")
+	vm, err := RunString("let fire = true; let Id = \"Simple_Id\"", "./")
 
 	if err != nil {
 		t.Error(err)
@@ -871,7 +871,7 @@ func TestFFIFromParts(t *testing.T) {
 		Res func(...any) (any, error) `parts:"res"`
 	}
 
-	vm, err := GetVMWithSource(`let mult = 2; let res() = (10 * mult)`)
+	vm, err := GetVMWithSource(`let mult = 2; let res() = (10 * mult)`, "./")
 
 	if err != nil {
 		t.Error(err)
@@ -911,7 +911,7 @@ func TestFFIToParts(t *testing.T) {
 		Res int `parts:"res"`
 	}
 
-	vm, err := GetVMWithSource(`let res = ffi(10)`)
+	vm, err := GetVMWithSource(`let res = ffi(10)`, "./")
 
 	if err != nil {
 		t.Error(err)
@@ -950,7 +950,7 @@ func TestFFIMap(t *testing.T) {
 		Res int `parts:"res"`
 	}
 
-	vm, err := GetVMWithSource(`let res = ffi[0]`)
+	vm, err := GetVMWithSource(`let res = ffi[0]`, "./")
 
 	if err != nil {
 		t.Error(err)
@@ -988,7 +988,7 @@ func TestPointer(t *testing.T) {
 		Action func(...any) (any, error)
 	}
 
-	vm, err := GetVMWithSource(`let Action(fight, mob) = getTurnFor(fight, getId(mob))`)
+	vm, err := GetVMWithSource(`let Action(fight, mob) = getTurnFor(fight, getId(mob))`, "./")
 
 	if err != nil {
 		t.Error(err)
@@ -1046,7 +1046,7 @@ func TestPointer(t *testing.T) {
 
 func TestChainedIfCondition(t *testing.T) {
 	vm, err := GetVMWithSource(`let turn = 3;
-		if ((turn == 2) == false) * ((turn == 1) == false) { printLn("ig") } else { printLn("nuh uh") }`)
+		if ((turn == 2) == false) * ((turn == 1) == false) { printLn("ig") } else { printLn("nuh uh") }`, "./")
 
 	if err != nil {
 		t.Error(err)
@@ -1073,7 +1073,7 @@ func TestReturnEarlyExit(t *testing.T) {
 		  }
 		  
     	  return 1
-		}`)
+		}`, "./")
 
 	if err != nil {
 		t.Error(err)
@@ -1130,7 +1130,7 @@ func TestBlockReturn(t *testing.T) {
 		  }
 		  
     	  1
-		}`)
+		}`, "./")
 
 	if err != nil {
 		t.Error(err)
@@ -1185,7 +1185,7 @@ func TestFuncSimplified(t *testing.T) {
 		IsValid func(...any) (any, error)
 	}
 
-	vm, err := GetVMWithSource(`let IsValid(turn) = if (Modulo(turn, 4)) == 0 { 0 } else 1`)
+	vm, err := GetVMWithSource(`let IsValid(turn) = if (Modulo(turn, 4)) == 0 { 0 } else 1`, "./")
 
 	if err != nil {
 		t.Error(err)
@@ -1240,7 +1240,7 @@ func TestMapHelper(t *testing.T) {
 		Stats map[int]int `parts:"stats"`
 	}
 
-	vm, err := GetVMWithSource("let stats = |> 0: 10, 1: 35 <|")
+	vm, err := GetVMWithSource("let stats = |> 0: 10, 1: 35 <|", "./")
 
 	if err != nil {
 		t.Error(err)
@@ -1281,7 +1281,7 @@ func TestMapHelperAlias(t *testing.T) {
 		Stats map[StatsEnum]int `parts:"stats"`
 	}
 
-	vm, err := GetVMWithSource("let stats = |> 0: 10, 1: 35 <|")
+	vm, err := GetVMWithSource("let stats = |> 0: 10, 1: 35 <|", "./")
 
 	if err != nil {
 		t.Error(err)
@@ -1327,7 +1327,7 @@ func TestNestedObject(t *testing.T) {
 		} `parts:"stats"`
 	}
 
-	vm, err := GetVMWithSource("let stats = |> Trigger: |> Type: 0 <|, Key: 35 <|")
+	vm, err := GetVMWithSource("let stats = |> Trigger: |> Type: 0 <|, Key: 35 <|", "./")
 
 	if err != nil {
 		t.Error(err)
@@ -1365,7 +1365,7 @@ func TestNestedFunctionCalls(t *testing.T) {
 		let z(a) = 3 * a
 
 		printLn(z(y(x(1))))
-	`)
+	`, "./")
 
 	if err != nil {
 		t.Error(err)

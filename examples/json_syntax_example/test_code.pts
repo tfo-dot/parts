@@ -1,0 +1,13 @@
+import syntax from "./syntax.pts" as JSON
+
+let tv = use (JSON) {`["false"]`}
+
+if tv[0] == "false" {
+	printLn("Yeah of course it's false")
+}
+
+let fv = use (JSON) {`{"key": "val"}`}
+
+if fv.key == "val" {
+	printLn("Value matches, sweet")
+}
