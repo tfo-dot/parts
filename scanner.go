@@ -32,12 +32,12 @@ func (s *Scanner) Next() (Token, error) {
 			if slices.Contains(rule.ValidChars, s.Peek()) {
 				rValue, rError := s.ParseRule(rule)
 
-				if rule.Skip {
-					return s.Next()
-				}
-
 				if rError != nil {
 					return Token{}, rError
+				}
+
+				if rule.Skip {
+					return s.Next()
 				}
 
 				if len(rValue) == 0 {
@@ -58,12 +58,12 @@ func (s *Scanner) Next() (Token, error) {
 		if rule.BaseRule(s.Peek()) {
 			rValue, rError := s.ParseRule(rule)
 
-			if rule.Skip {
-				return s.Next()
-			}
-
 			if rError != nil {
 				return Token{}, rError
+			}
+
+			if rule.Skip {
+				return s.Next()
 			}
 
 			if len(rValue) == 0 {
@@ -114,6 +114,7 @@ func (s *Scanner) ParseRule(rule ScannerRule) ([]Token, error) {
 		res, err := rule.Process(rule.Mappings, s.Source[start:s.Index])
 
 		if err != nil {
+			println("OK")
 			return []Token{}, err
 		}
 

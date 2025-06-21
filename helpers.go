@@ -118,7 +118,7 @@ func RunStringWithSyntax(codeString, syntax, modulePath string) (*VM, error) {
 	code, err := parser.ParseAll()
 
 	if err != nil {
-		return nil, errors.Join(errors.New("got error from within parser"), err)
+		return nil, errors.Join(errors.New("got error from within syntax parser"), err)
 	}
 
 	literals := make([]*Literal, len(parser.Literals))

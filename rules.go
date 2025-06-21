@@ -99,7 +99,7 @@ func GetScannerRules() []ScannerRule {
 				"false": "", "if": "", "let": "", "true": "",
 				"fun": "", "return": "", "else": "", "for": "",
 				"import": "", "from": "", "as": "", "syntax": "",
-				"use": "", "raise": "", "break": "",
+				"use": "", "raise": "", "break": "", "continue": "",
 			},
 		},
 		{
@@ -337,25 +337,18 @@ func GetParserRules() []ParserRule {
 							Entries: map[string]*Literal{
 								"RTUse": {FunLiteral, NativeMethod{
 									Args: []string{"code"},
-									Body: func(vm *VM, args []*Literal) error {
-
-										if len(args) < 1 {
-											return nil
-										}
-
+									Body: func(vm *VM, args []*Literal) (*Literal, error) {
 										if args[0].LiteralType != StringLiteral {
-											return nil
+											return nil, errors.New("expected string as a argument to Syntax.Use")
 										}
 
 										newVm, err := RunStringWithSyntax(args[0].Value.(string), string(rawFile), p.ModulePath)
 
 										if err != nil {
-											return errors.Join(errors.New("got error while running syntax"), err)
+											return nil, errors.Join(errors.New("got error while running syntax"), err)
 										}
 
-										vm.ReturnValue = newVm.LastExpr
-
-										return nil
+										return newVm.LastExpr, nil
 									},
 								}},
 							},
@@ -603,6 +596,10 @@ func GetParserRules() []ParserRule {
 					for cond := true; cond; cond = p.matchOperator("COMMA") {
 						identifierToken, err := p.advance()
 
+						if err != nil {
+							panic(err)
+						}
+
 						if identifierToken.Type != TokenIdentifier {
 							return []Bytecode{}, errors.Join(errors.New("encountered unexpected token in function params"), err)
 						}
@@ -706,10 +703,14 @@ func GetParserRules() []ParserRule {
 					}
 
 					loopCondition = btc
+				} else {
+					loopCondition = []Bytecode{B_LITERAL, 1}
 				}
 
-				if len(loopCondition) == 0 {
-					loopCondition = []Bytecode{B_LITERAL, 1}
+				conditionLength, err := encodeLen(len(loopCondition))
+
+				if err != nil {
+					return []Bytecode{}, errors.Join(errors.New("got error while encoding length expression (encoding for body)"), err)
 				}
 
 				forBody, err := p.parse()
@@ -724,45 +725,7 @@ func GetParserRules() []ParserRule {
 					return []Bytecode{}, errors.Join(errors.New("got error while encoding length expression (encoding for body)"), err)
 				}
 
-				tempReverseJump, err := encodeLen(len(loopCondition) + len(forBody) + len(bodyLength))
-
-				if err != nil {
-					return []Bytecode{}, errors.Join(errors.New("got error while encoding length expression (encoding reverse jump length)"), err)
-				}
-
-				bodyLength, err = encodeLen(len(forBody) + len(tempReverseJump) + 1)
-
-				if err != nil {
-					return []Bytecode{}, errors.Join(errors.New("got error while encoding length expression (encoding for body - 2 pass)"), err)
-				}
-
-				tempReverseJump, err = encodeLen(len(loopCondition) + len(forBody) + len(bodyLength))
-
-				if err != nil {
-					return []Bytecode{}, errors.Join(errors.New("got error while encoding length expression (encoding reverse jump length - 2 pass)"), err)
-				}
-
-				bodyLength, err = encodeLen(len(forBody) + len(tempReverseJump) + 1)
-
-				if err != nil {
-					return []Bytecode{}, errors.Join(errors.New("got error while encoding length expression (encoding for body - 3 pass)"), err)
-				}
-
-				tempReverseJump, err = encodeLen(len(loopCondition) + len(forBody) + len(bodyLength))
-
-				if err != nil {
-					return []Bytecode{}, errors.Join(errors.New("got error while encoding length expression (encoding reverse jump length - 3 pass)"), err)
-				}
-
-				return append(append(append(append(append(append([]Bytecode{B_COND_JUMP}, loopCondition...), bodyLength...), forBody...), B_JUMP_REV), tempReverseJump...), 0), nil
-			},
-		},
-		{
-			Id: "Break",
-			AdvanceToken: true,
-			Rule:         func(p *Parser) bool { return p.check(TokenKeyword, "BREAK") },
-			Parse: func(p *Parser) ([]Bytecode, error) {
-				return []Bytecode{B_RETURN}, nil
+				return append(append(append(append([]Bytecode{B_LOOP}, conditionLength...), loopCondition...), bodyLength...), forBody...), nil
 			},
 		},
 		{
@@ -828,6 +791,22 @@ func GetParserRules() []ParserRule {
 			},
 		},
 		{
+			Id:           "BreakExpr",
+			AdvanceToken: true,
+			Rule:         func(p *Parser) bool { return p.check(TokenKeyword, "BREAK") },
+			Parse: func(p *Parser) ([]Bytecode, error) {
+				return []Bytecode{B_BREAK}, nil
+			},
+		},
+				{
+			Id:           "ContinueExpr",
+			AdvanceToken: true,
+			Rule:         func(p *Parser) bool { return p.check(TokenKeyword, "CONTINUE") },
+			Parse: func(p *Parser) ([]Bytecode, error) {
+				return []Bytecode{B_CONTINUE}, nil
+			},
+		},
+		{
 			Id:           "BoolFExpr",
 			AdvanceToken: true,
 			Rule:         func(p *Parser) bool { return p.check(TokenKeyword, "FALSE") },
@@ -845,7 +824,7 @@ func GetParserRules() []ParserRule {
 				currentToken, err := p.peek()
 
 				if err != nil {
-					return false
+					panic(err)
 				}
 
 				return currentToken.Type == TokenNumber
@@ -881,7 +860,7 @@ func GetParserRules() []ParserRule {
 				currentToken, err := p.peek()
 
 				if err != nil {
-					return false
+					panic(err)
 				}
 
 				return currentToken.Type == TokenString
@@ -911,7 +890,7 @@ func GetParserRules() []ParserRule {
 				currentToken, err := p.peek()
 
 				if err != nil {
-					return false
+					panic(err)
 				}
 
 				return currentToken.Type == TokenIdentifier
@@ -1029,7 +1008,11 @@ func GetParserRules() []ParserRule {
 					}
 
 					if !p.matchOperator("RIGHT_BRACKET") {
-						tok, _ := p.peek()
+						tok, err := p.peek()
+
+						if err != nil {
+							panic(err)
+						}
 
 						return []Bytecode{}, fmt.Errorf("expected ']' after array elements, got %s", string(tok.Value))
 					}

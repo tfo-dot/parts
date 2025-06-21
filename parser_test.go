@@ -1034,67 +1034,6 @@ func TestIfExpressionNoElse(t *testing.T) {
 	CheckBytecode(t, bytecode, []Bytecode{B_COND_JUMP, B_LITERAL, Bytecode(condVal), 5, B_NEW_SCOPE, B_RETURN, B_LITERAL, Bytecode(varVal), B_END_SCOPE, 0})
 }
 
-func TestForNoCondition(t *testing.T) {
-	parser := GetParserWithSource("for { printLn(`x`) }", "./")
-	bytecode, err := parser.parse()
-
-	if err != nil {
-		t.Errorf("unexpected error: %s", err)
-		return
-	}
-
-	condVal, _ := GetParserLiteral(parser, StringLiteral, "x")
-
-	if condVal == -1 {
-		t.Error("literal (String, 'x') wasn't present")
-		return
-	}
-
-	printLnVar, _ := GetParserLiteral(parser, RefLiteral, "printLn")
-
-	if printLnVar == -1 {
-		t.Error("literal (Ref, 'printLn') wasn't present")
-		return
-	}
-	//body length + reverse + reverse len
-	bLen := 8 + 1 + 1
-
-	//body length (- reverse - reverse len) + actual body length encoding + condition
-	rLen := bLen - (2) + 1 + 2
-
-	CheckBytecode(t, bytecode, []Bytecode{
-		B_COND_JUMP, B_LITERAL, 1,
-		Bytecode(bLen), B_NEW_SCOPE, B_CALL, B_LITERAL, Bytecode(printLnVar), 1, B_LITERAL, Bytecode(condVal), B_END_SCOPE, B_JUMP_REV, Bytecode(rLen),
-		0,
-	})
-}
-
-func TestForCondition(t *testing.T) {
-	parser := GetParserWithSource("if false { return 0 }", "./")
-	bytecode, err := parser.parse()
-
-	if err != nil {
-		t.Errorf("unexpected error: %s", err)
-		return
-	}
-
-	condVal, _ := GetParserLiteral(parser, BoolLiteral, false)
-
-	if condVal == -1 {
-		t.Error("literal (Bool, false) wasn't present")
-		return
-	}
-
-	varVal, _ := GetParserLiteral(parser, IntLiteral, 0)
-
-	if varVal == -1 {
-		t.Error("literal (Int, 0) wasn't present")
-		return
-	}
-
-	CheckBytecode(t, bytecode, []Bytecode{B_COND_JUMP, B_LITERAL, Bytecode(condVal), 5, B_NEW_SCOPE, B_RETURN, B_LITERAL, Bytecode(varVal), B_END_SCOPE, 0})
-}
-
 func TestMathAdd(t *testing.T) {
 	parser := GetParserWithSource("1 + 1", "./")
 	bytecode, err := parser.parse()
@@ -1257,7 +1196,7 @@ func TestModdedParser(t *testing.T) {
 		AddScannerRule( |>
 			Result: TokenKeyword,
 			BaseRule: fun(r) {
-				return ((r >= "a") * (r <= "z")) + ((r >= "A") * (r <= "Z")) + (r == "_")
+				return (((r >= "a") * (r <= "z")) + ((r >= "A") * (r <= "Z")) + (r == "_"))
 			},
 			Process: fun(mappings, runs) {
 				if (Object.Has)(mappings, runs) {
@@ -1308,13 +1247,22 @@ func TestModdedParser(t *testing.T) {
 		    Parse: fun(p, btc) {
 		    	let var = ParserAppendLiteral(p, |>
 			    	LiteralType: RefLiteral,
-			    	Value: |>
-			    		Reference: "printLn",
-			    		Dynamic: false
-			    	<|
+			    	Value: |> Reference: "printLn", Dynamic: false <|
 		    	<| )
 
+		    	printLn("oh")
+
+		    	if (Result.IsResult)(var) {
+		    		raise var
+		    	}
+
+		    	printLn("ma")
+
+
 		    	let x = ((Array.AppendAll)([8], var)) + 1
+
+		    	printLn("god")
+
 
 		    	return (Array.AppendAll)( x, btc )
 		    }

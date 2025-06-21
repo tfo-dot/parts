@@ -13,87 +13,64 @@ import (
 var StandardLibrary = map[string]*Literal{
 	"RTprint": {FunLiteral, NativeMethod{
 		Args: []string{"arg"},
-		Body: func(vm *VM, args []*Literal) error {
-			if len(args) == 0 {
-				return nil
-			}
-
+		Body: func(vm *VM, args []*Literal) (*Literal, error) {
 			fmt.Print(args[0].pretify())
-			return nil
+			return nil, nil
 		},
 	}},
 	"RTprintLn": {FunLiteral, NativeMethod{
 		Args: []string{"arg"},
-		Body: func(vm *VM, args []*Literal) error {
-			if len(args) == 0 {
-				return nil
-			}
-
+		Body: func(vm *VM, args []*Literal) (*Literal, error) {
 			fmt.Println(args[0].pretify())
-			return nil
+			return nil, nil
 		},
 	}},
 	"RTreadLn": {FunLiteral, NativeMethod{
 		Args: []string{},
-		Body: func(vm *VM, args []*Literal) error {
+		Body: func(vm *VM, args []*Literal) (*Literal, error) {
 			reader := bufio.NewReader(os.Stdin)
 			text, err := reader.ReadString('\n')
 
 			if err != nil {
-				println(err.Error())
+				return nil, errors.Join(errors.New("got error while reading os.Stdin"), err)
 			}
 
-			vm.ReturnValue = &Literal{StringLiteral, text}
-			return nil
+			return &Literal{StringLiteral, text}, nil
 		},
 	}},
 	"RTArray": {ParsedObjLiteral, &PartsObject{
 		Entries: map[string]*Literal{
 			"RTHas": {FunLiteral, NativeMethod{
 				Args: []string{"arr", "elt"},
-				Body: func(vm *VM, args []*Literal) error {
-					if len(args) < 2 {
-						return nil
-					}
-
+				Body: func(vm *VM, args []*Literal) (*Literal, error) {
 					acc := args[0]
 
 					if acc.LiteralType != ParsedListLiteral {
-						vm.ReturnValue = &Literal{BoolLiteral, false}
-						return nil
+						return &Literal{BoolLiteral, false}, nil
 					}
 
 					for _, val := range acc.Value.(PartsObject).Entries {
 						if val, err := args[1].opEq(val); err != nil && val.Value.(bool) {
-							vm.ReturnValue = &Literal{BoolLiteral, true}
-							return nil
+							return &Literal{BoolLiteral, true}, nil
 						}
 					}
 
-					vm.ReturnValue = &Literal{BoolLiteral, false}
-					return nil
+					return &Literal{BoolLiteral, false}, nil
 				},
 			}},
 			"RTAppendAll": {FunLiteral, NativeMethod{
 				Args: []string{"arr", "other"},
-				Body: func(vm *VM, args []*Literal) error {
-					if len(args) < 2 {
-						return nil
+				Body: func(vm *VM, args []*Literal) (*Literal, error) {
+					if args[0].LiteralType != ParsedListLiteral {
+						return nil, errors.New("expected array type as a first argument to Array.AppendAll")
 					}
 
-					arr := args[0]
-
-					if arr.LiteralType != ParsedListLiteral {
-						panic("expected array type (base array)")
+					if args[1].LiteralType != ParsedListLiteral {
+						println(args[1].LiteralType)
+						return nil, errors.New("expected array type as a second argument to Array.AppendAll")
 					}
 
-					other := args[1]
-
-					if other.LiteralType != ParsedListLiteral {
-						panic("expected array type (2nd arg)")
-					}
-
-					entries := other.Value.(PartsIndexable).GetAll()
+					entries := args[1].Value.(PartsIndexable).GetAll()
 
 					keys := make([]string, 0, len(entries))
 
@@ -106,24 +83,23 @@ var StandardLibrary = map[string]*Literal{
 						numI, errI := strconv.Atoi(numStrI)
 
 						if errI != nil {
-							panic(fmt.Sprintf("Warning: Could not parse number from key %s: %v\n", keys[i], errI))
+							panic(fmt.Sprintf("could not parse number from key %s: %v\n", keys[i], errI))
 						}
 
 						numStrJ := strings.TrimPrefix(keys[j], "IT")
 						numJ, errJ := strconv.Atoi(numStrJ)
 						if errJ != nil {
-							panic(fmt.Sprintf("Warning: Could not parse number from key %s: %v\n", keys[j], errJ))
+							panic(fmt.Sprintf("could not parse number from key %s: %v\n", keys[j], errJ))
 						}
 
 						return numI < numJ
 					})
 
 					for _, key := range keys {
-						arr.Value.(PartsIndexable).SetByKey(fmt.Sprintf("IT%d", arr.Value.(PartsIndexable).Length()), entries[key])
+						args[0].Value.(PartsIndexable).SetByKey(fmt.Sprintf("IT%d", args[0].Value.(PartsIndexable).Length()), entries[key])
 					}
 
-					vm.ReturnValue = arr
-					return nil
+					return args[0], nil
 				},
 			}},
 		},
@@ -132,31 +108,22 @@ var StandardLibrary = map[string]*Literal{
 		Entries: map[string]*Literal{
 			"RTHas": {FunLiteral, NativeMethod{
 				Args: []string{"obj", "elt"},
-				Body: func(vm *VM, args []*Literal) error {
-					if len(args) < 2 {
-						return nil
-					}
-
-					acc := args[0]
-
-					if acc.LiteralType != ParsedObjLiteral {
-						vm.ReturnValue = &Literal{BoolLiteral, false}
-						return nil
+				Body: func(vm *VM, args []*Literal) (*Literal, error) {
+					if args[0].LiteralType != ParsedObjLiteral {
+						return &Literal{BoolLiteral, false}, nil
 					}
 
 					if args[1].LiteralType != StringLiteral {
-						vm.ReturnValue = &Literal{BoolLiteral, false}
-						return nil
+						return &Literal{BoolLiteral, false}, nil
 					}
 
-					casted, ok := acc.Value.(PartsIndexable)
+					casted, ok := args[0].Value.(PartsIndexable)
 
 					if !ok {
-						return errors.New("obj is not parts PartsIndexable")
+						return nil, errors.New("obj is not parts PartsIndexable")
 					}
 
-					vm.ReturnValue = &Literal{BoolLiteral, casted.HasByKey(fmt.Sprintf("RT%s", args[1].Value.(string)))}
-					return nil
+					return &Literal{BoolLiteral, casted.HasByKey(fmt.Sprintf("RT%s", args[1].Value.(string)))}, nil
 				},
 			}},
 		},
@@ -165,70 +132,44 @@ var StandardLibrary = map[string]*Literal{
 		Entries: map[string]*Literal{
 			"RTLength": {FunLiteral, NativeMethod{
 				Args: []string{"str"},
-				Body: func(vm *VM, args []*Literal) error {
-					if len(args) < 1 {
-						return nil
+				Body: func(vm *VM, args []*Literal) (*Literal, error) {
+					if args[0].LiteralType != StringLiteral {
+						return nil, errors.New("expected string as a argument to String.Length")
 					}
 
-					acc := args[0]
-
-					if acc.LiteralType != StringLiteral {
-						return nil
-					}
-
-					vm.ReturnValue = &Literal{IntLiteral, len(acc.Value.(string))}
-					return nil
+					return &Literal{IntLiteral, len(args[0].Value.(string))}, nil
 				},
 			}},
 			"RTAt": {FunLiteral, NativeMethod{
 				Args: []string{"str", "idx"},
-				Body: func(vm *VM, args []*Literal) error {
-					if len(args) < 2 {
-						return nil
-					}
-
-					acc := args[0]
-
-					if acc.LiteralType != StringLiteral {
-						return nil
+				Body: func(vm *VM, args []*Literal) (*Literal, error) {
+					if args[0].LiteralType != StringLiteral {
+						return nil, errors.New("expected string as a argument to String.At")
 					}
 
 					if args[1].LiteralType != IntLiteral {
-						return nil
+						return nil, errors.New("expected int as index argument to String.At")
 					}
 
-					vm.ReturnValue = &Literal{StringLiteral, string(acc.Value.(string)[args[1].Value.(int)])}
-					return nil
+					return &Literal{StringLiteral, string(args[0].Value.(string)[args[1].Value.(int)])}, nil
 				},
 			}},
 			"RTSubstring": {FunLiteral, NativeMethod{
 				Args: []string{"str", "start", "end"},
-				Body: func(vm *VM, args []*Literal) error {
-					if len(args) < 2 {
-						return nil
-					}
-
-					acc := args[0]
-
-					if acc.LiteralType != StringLiteral {
-						return nil
+				Body: func(vm *VM, args []*Literal) (*Literal, error) {
+					if args[0].LiteralType != StringLiteral {
+						return nil, errors.New("expected string as a argument to String.Substring")
 					}
 
 					if args[1].LiteralType != IntLiteral {
-						return nil
+						return nil, errors.New("expected int as start index argument to String.Substring")
 					}
 
-					if len(args) > 2 && args[2].LiteralType != IntLiteral {
-						return nil
+					if args[2].LiteralType != IntLiteral {
+						return nil, errors.New("expected int as end index argument to String.Substring")
 					}
 
-					if len(args) == 2 {
-						vm.ReturnValue = &Literal{StringLiteral, acc.Value.(string)[args[1].Value.(int):]}
-						return nil
-					}
-
-					vm.ReturnValue = &Literal{StringLiteral, acc.Value.(string)[args[1].Value.(int):args[2].Value.(int)]}
-					return nil
+					return &Literal{StringLiteral, args[0].Value.(string)[args[1].Value.(int):args[2].Value.(int)]}, nil
 
 				},
 			}},
@@ -238,26 +179,20 @@ var StandardLibrary = map[string]*Literal{
 		Entries: map[string]*Literal{
 			"RTParse": {FunLiteral, NativeMethod{
 				Args: []string{"str"},
-				Body: func(vm *VM, args []*Literal) error {
-					if len(args) < 1 {
-						return nil
-					}
-
+				Body: func(vm *VM, args []*Literal) (*Literal, error) {
 					acc := args[0]
 
 					if acc.LiteralType != StringLiteral {
-						vm.ReturnValue = &Literal{BoolLiteral, false}
-						return nil
+						return &Literal{BoolLiteral, false}, nil
 					}
 
 					val, err := strconv.Atoi(acc.Value.(string))
 
 					if err != nil {
-						return err
+						return nil, err
 					}
 
-					vm.ReturnValue = &Literal{LiteralType: IntLiteral, Value: val}
-					return nil
+					return &Literal{LiteralType: IntLiteral, Value: val}, nil
 				},
 			}},
 		},
@@ -270,77 +205,43 @@ var StandardLibrary = map[string]*Literal{
 			}},
 			"RTSome": {FunLiteral, NativeMethod{
 				Args: []string{"val"},
-				Body: func(vm *VM, args []*Literal) error {
-
-					vm.ReturnValue = &Literal{ParsedObjLiteral, &PartsSpecialObject{
+				Body: func(vm *VM, args []*Literal) (*Literal, error) {
+					return &Literal{ParsedObjLiteral, &PartsSpecialObject{
 						Internal: &PartsObject{Entries: map[string]*Literal{"RTValue": args[0]}},
 						Hash:     "Option.Some",
-					}}
-
-					return nil
+					}}, nil
 				},
 			}},
 			"RTIsSome": {FunLiteral, NativeMethod{
 				Args: []string{"obj"},
-				Body: func(vm *VM, args []*Literal) error {
-					acc := args[0]
-
-					if acc.LiteralType != ParsedObjLiteral {
-						vm.ReturnValue = &Literal{BoolLiteral, false}
-						return nil
+				Body: func(vm *VM, args []*Literal) (*Literal, error) {
+					if args[0].LiteralType != ParsedObjLiteral {
+						return &Literal{BoolLiteral, false}, nil
 					}
 
-					th := acc.Value.(PartsIndexable).TypeHash()
-
-					if th == "Option.Some" {
-						vm.ReturnValue = &Literal{BoolLiteral, true}
-						return nil
-					}
-
-					vm.ReturnValue = &Literal{BoolLiteral, false}
-					return nil
+					return &Literal{BoolLiteral, args[0].Value.(PartsIndexable).TypeHash() == "Option.Some"}, nil
 				},
 			}},
 			"RTIsNone": {FunLiteral, NativeMethod{
 				Args: []string{"obj"},
-				Body: func(vm *VM, args []*Literal) error {
-					acc := args[0]
-
-					if acc.LiteralType != ParsedObjLiteral {
-						vm.ReturnValue = &Literal{BoolLiteral, false}
-						return nil
+				Body: func(vm *VM, args []*Literal) (*Literal, error) {
+					if args[0].LiteralType != ParsedObjLiteral {
+						return &Literal{BoolLiteral, false}, nil
 					}
 
-					th := acc.Value.(PartsIndexable).TypeHash()
-
-					if th == "Option.None" {
-						vm.ReturnValue = &Literal{BoolLiteral, true}
-						return nil
-					}
-
-					vm.ReturnValue = &Literal{BoolLiteral, false}
-					return nil
+					return &Literal{BoolLiteral, args[0].Value.(PartsIndexable).TypeHash() == "Option.None"}, nil
 				},
 			}},
 			"RTIsOption": {FunLiteral, NativeMethod{
 				Args: []string{"obj"},
-				Body: func(vm *VM, args []*Literal) error {
-					acc := args[0]
-
-					if acc.LiteralType != ParsedObjLiteral {
-						vm.ReturnValue = &Literal{BoolLiteral, false}
-						return nil
+				Body: func(vm *VM, args []*Literal) (*Literal, error) {
+					if args[0].LiteralType != ParsedObjLiteral {
+						return &Literal{BoolLiteral, false}, nil
 					}
 
-					th := acc.Value.(PartsIndexable).TypeHash()
+					th := args[0].Value.(PartsIndexable).TypeHash()
 
-					if th == "Option.None" || th == "Option.Some" {
-						vm.ReturnValue = &Literal{BoolLiteral, true}
-						return nil
-					}
-
-					vm.ReturnValue = &Literal{BoolLiteral, false}
-					return nil
+					return &Literal{BoolLiteral, th == "Option.None" || th == "Option.Some"}, nil
 				},
 			}},
 		},
@@ -349,88 +250,32 @@ var StandardLibrary = map[string]*Literal{
 		Entries: map[string]*Literal{
 			"RTError": {FunLiteral, NativeMethod{
 				Args: []string{"val"},
-				Body: func(vm *VM, args []*Literal) error {
-					vm.ReturnValue = &Literal{ParsedObjLiteral, &PartsSpecialObject{
-						Internal: &PartsObject{Entries: map[string]*Literal{"RTValue": args[0]}},
-						Hash:     "Result.Error",
-					}}
-
-					return nil
+				Body: func(vm *VM, args []*Literal) (*Literal, error) {
+					return &Literal{ParsedObjLiteral, NewResultError(args[0])}, nil
 				},
 			}},
 			"RTOk": {FunLiteral, NativeMethod{
 				Args: []string{"val"},
-				Body: func(vm *VM, args []*Literal) error {
-
-					vm.ReturnValue = &Literal{ParsedObjLiteral, &PartsSpecialObject{
-						Internal: &PartsObject{Entries: map[string]*Literal{"RTValue": args[0]}},
-						Hash:     "Result.Ok",
-					}}
-
-					return nil
+				Body: func(vm *VM, args []*Literal) (*Literal, error) {
+					return &Literal{ParsedObjLiteral, NewResultOK(args[0])}, nil
 				},
 			}},
 			"RTIsOk": {FunLiteral, NativeMethod{
 				Args: []string{"obj"},
-				Body: func(vm *VM, args []*Literal) error {
-					acc := args[0]
-
-					if acc.LiteralType != ParsedObjLiteral {
-						vm.ReturnValue = &Literal{BoolLiteral, false}
-						return nil
-					}
-
-					th := acc.Value.(PartsIndexable).TypeHash()
-
-					if th == "Result.Ok" {
-						vm.ReturnValue = &Literal{BoolLiteral, true}
-						return nil
-					}
-
-					vm.ReturnValue = &Literal{BoolLiteral, false}
-					return nil
+				Body: func(vm *VM, args []*Literal) (*Literal, error) {
+					return &Literal{BoolLiteral, IsResultOK(args[0])}, nil
 				},
 			}},
 			"RTIsResult": {FunLiteral, NativeMethod{
 				Args: []string{"obj"},
-				Body: func(vm *VM, args []*Literal) error {
-					acc := args[0]
-
-					if acc.LiteralType != ParsedObjLiteral {
-						vm.ReturnValue = &Literal{BoolLiteral, false}
-						return nil
-					}
-
-					th := acc.Value.(PartsIndexable).TypeHash()
-
-					if th == "Result.Ok" || th == "Result.Error" {
-						vm.ReturnValue = &Literal{BoolLiteral, true}
-						return nil
-					}
-
-					vm.ReturnValue = &Literal{BoolLiteral, false}
-					return nil
+				Body: func(vm *VM, args []*Literal) (*Literal, error) {
+					return &Literal{BoolLiteral, IsResult(args[0])}, nil
 				},
 			}},
 			"RTIsError": {FunLiteral, NativeMethod{
 				Args: []string{"obj"},
-				Body: func(vm *VM, args []*Literal) error {
-					acc := args[0]
-
-					if acc.LiteralType != ParsedObjLiteral {
-						vm.ReturnValue = &Literal{BoolLiteral, false}
-						return nil
-					}
-
-					th := acc.Value.(PartsIndexable).TypeHash()
-
-					if th == "Result.Error" {
-						vm.ReturnValue = &Literal{BoolLiteral, true}
-						return nil
-					}
-
-					vm.ReturnValue = &Literal{BoolLiteral, false}
-					return nil
+				Body: func(vm *VM, args []*Literal) (*Literal, error) {
+					return &Literal{BoolLiteral, IsResultError(args[0])}, nil
 				},
 			}},
 		},
@@ -439,7 +284,7 @@ var StandardLibrary = map[string]*Literal{
 
 type NativeMethod struct {
 	Args []string
-	Body func(vm *VM, args []*Literal) error
+	Body func(vm *VM, args []*Literal) (*Literal, error)
 }
 
 func (m NativeMethod) Call(vm *VM) error {
@@ -455,7 +300,19 @@ func (m NativeMethod) Call(vm *VM) error {
 		arguments[idx] = val
 	}
 
-	return m.Body(vm, arguments)
+	res, err := m.Body(vm, arguments)
+
+	if err != nil {
+		return err
+	}
+
+	if res != nil {
+		vm.ReturnValue = res
+		vm.ExitCode = ReturnCode
+		vm.EarlyExit = true
+	}
+
+	return err
 }
 
 func (m NativeMethod) GetArguments() []string {
@@ -501,4 +358,44 @@ func (pso PartsSpecialObject) HasByKey(key string) bool {
 
 func (pso PartsSpecialObject) TypeHash() string {
 	return pso.Hash
+}
+
+func IsResult(literal *Literal) bool {
+	if literal.LiteralType == ParsedObjLiteral {
+		return false
+	}
+
+	th := literal.Value.(PartsIndexable).TypeHash()
+
+	return th == "Result.Error" || th == "Result.Ok"
+}
+
+func IsResultOK(literal *Literal) bool {
+	if literal.LiteralType == ParsedObjLiteral {
+		return false
+	}
+
+	return literal.Value.(PartsIndexable).TypeHash() == "Result.Ok"
+}
+
+func IsResultError(literal *Literal) bool {
+	if literal.LiteralType == ParsedObjLiteral {
+		return false
+	}
+
+	return literal.Value.(PartsIndexable).TypeHash() == "Result.Error"
+}
+
+func NewResultError(literal *Literal) *Literal {
+	return &Literal{ParsedObjLiteral, &PartsSpecialObject{
+		Internal: &PartsObject{Entries: map[string]*Literal{"RTValue": literal}},
+		Hash:     "Result.Error",
+	}}
+}
+
+func NewResultOK(literal *Literal) *Literal {
+	return &Literal{ParsedObjLiteral, &PartsSpecialObject{
+		Internal: &PartsObject{Entries: map[string]*Literal{"RTValue": literal}},
+		Hash:     "Result.Ok",
+	}}
 }

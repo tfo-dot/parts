@@ -5,6 +5,15 @@ import (
 	"fmt"
 )
 
+type ExitCode = int
+
+const (
+	NormalCode ExitCode = iota
+	BreakCode
+	ContinueCode
+	ReturnCode
+)
+
 type VM struct {
 	Enviroment *VMEnviroment
 
@@ -13,7 +22,7 @@ type VM struct {
 	ReturnValue *Literal
 	LastExpr    *Literal
 	EarlyExit   bool
-	JumpOffset  int
+	ExitCode    ExitCode
 
 	//Filled from parser
 	Code     []Bytecode
@@ -27,6 +36,10 @@ func (vm *VM) Run() error {
 
 		if err != nil {
 			return errors.Join(errors.New("got error while executing bytecode"), err)
+		}
+
+		if vm.EarlyExit {
+			vm.Idx = len(vm.Code)
 		}
 	}
 
@@ -57,14 +70,7 @@ func (vm *VM) Execute() error {
 		exprType, value, err := vm.runExpr(true)
 
 		if err != nil {
-			return errors.Join(errors.New("got error while running variable value"), err)
-		}
-
-		if exprType == NoValue {
-			return fmt.Errorf(
-				"got no value, expected value at '%s'",
-				nameLiteral.(*Literal).Value.(ReferenceDeclaration).Reference,
-			)
+			return errors.Join(errors.New("got error while running variable value (B_DECLARE)"), err)
 		}
 
 		if exprType != TypeLiteral {
@@ -172,7 +178,7 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 		switch accessor.LiteralType {
 		case ListLiteral, ObjLiteral, ParsedListLiteral, ParsedObjLiteral:
 		default:
-			return UndefinedExpression, nil, fmt.Errorf("unexpected value type (%d)", accessor.LiteralType)
+			return UndefinedExpression, nil, fmt.Errorf("unexpected value type (%d) (B_DOT)", accessor.LiteralType)
 		}
 
 		if accessor.LiteralType == ListLiteral || accessor.LiteralType == ObjLiteral {
@@ -198,7 +204,7 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 				_, value, err := vm.runExpr(true)
 
 				if err != nil {
-					return UndefinedExpression, nil, errors.Join(errors.New("got error while running variable value"), err)
+					return UndefinedExpression, nil, errors.Join(errors.New("got error while running variable value (B_DOT, B_SET)"), err)
 				}
 
 				simpleValue, err := vm.simplifyLiteral(value.(*Literal), true)
@@ -222,7 +228,7 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 				_, value, err := vm.runExpr(true)
 
 				if err != nil {
-					return UndefinedExpression, nil, errors.Join(errors.New("got error while running variable value"), err)
+					return UndefinedExpression, nil, errors.Join(errors.New("got error while running variable value (B_SET, single)"), err)
 				}
 
 				simpleValue, err := vm.simplifyLiteral(value.(*Literal), true)
@@ -327,7 +333,7 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 			_, value, err := vm.runExpr(true)
 
 			if err != nil {
-				return UndefinedExpression, nil, errors.Join(errors.New("got error while running variable value"), err)
+				return UndefinedExpression, nil, errors.Join(errors.New("got error while running variable value (B_SET)"), err)
 			}
 
 			simpleValue, err := vm.simplifyLiteral(value.(*Literal), true)
@@ -356,7 +362,7 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 		exprType, value, err := vm.runExpr(true)
 
 		if err != nil {
-			return UndefinedExpression, nil, errors.Join(errors.New("got error while running variable value"), err)
+			return UndefinedExpression, nil, errors.Join(errors.New("got error while running variable value (B_SET)"), err)
 		}
 
 		if exprType != TypeLiteral {
@@ -384,15 +390,21 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 		exprType, val, err := vm.runExpr(true)
 
 		if err != nil {
-			return UndefinedExpression, nil, errors.Join(errors.New("got error while running variable value"), err)
+			return UndefinedExpression, nil, errors.Join(errors.New("got error while running variable value (B_RETURN)"), err)
 		}
 
 		if exprType != TypeLiteral {
-			return UndefinedExpression, nil, errors.New("expected literal as variable name")
+			return UndefinedExpression, nil, errors.New("expected literal as return value")
 		}
 
-		vm.ReturnValue = val.(*Literal)
+		simplifed, err := vm.simplifyLiteral(val.(*Literal), true)
 
+		if err != nil {
+			return UndefinedExpression, nil, errors.Join(errors.New("got error while simplyfing return value"), err)
+		}
+
+		vm.ReturnValue = simplifed
+		vm.ExitCode = ReturnCode
 		vm.EarlyExit = true
 
 		return NoValue, nil, nil
@@ -402,19 +414,27 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 		exprType, val, err := vm.runExpr(true)
 
 		if err != nil {
-			return UndefinedExpression, nil, errors.Join(errors.New("got error while running variable value"), err)
+			return UndefinedExpression, nil, errors.Join(errors.New("got error while running variable value (B_RAISE)"), err)
 		}
 
 		if exprType != TypeLiteral {
 			return UndefinedExpression, nil, errors.New("expected literal as variable name")
 		}
 
-		vm.ReturnValue = &Literal{ParsedObjLiteral, &PartsSpecialObject{
-			Internal: &PartsObject{Entries: map[string]*Literal{"RTValue": val.(*Literal)}},
-			Hash:     "Result.Error",
-		}}
+		simplifed, err := vm.simplifyLiteral(val.(*Literal), true)
+
+		if err != nil {
+			return UndefinedExpression, nil, errors.Join(errors.New("got error while simplyfing raise value"), err)
+		}
+
+		if IsResult(simplifed) {
+			vm.ReturnValue = simplifed
+		} else {
+			vm.ReturnValue = NewResultError(simplifed)
+		}
 
 		vm.EarlyExit = true
+		vm.ExitCode = ReturnCode
 
 		return NoValue, nil, nil
 	case B_CALL:
@@ -467,6 +487,10 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 
 		tempVM := vm.copyVM()
 
+		if len(funcObj.GetArguments()) > len(values) {
+			return UndefinedExpression, nil, errors.New("got less arguments than expected")
+		}
+
 		for idx, param := range funcObj.GetArguments() {
 			tempVM.Enviroment.define(fmt.Sprintf("RT%s", string(param)), values[idx])
 		}
@@ -476,31 +500,43 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 		}
 
 		if tempVM.EarlyExit {
-			if tempVM.ReturnValue == nil {
+			switch tempVM.ExitCode {
+			case NormalCode:
 				if tempVM.LastExpr != nil {
-					vm.LastExpr = tempVM.LastExpr
-					return TypeLiteral, tempVM.LastExpr, nil
+					simplified, err := tempVM.simplifyLiteral(tempVM.LastExpr, true)
+
+					if err != nil {
+						return UndefinedExpression, nil, errors.Join(errors.New("got error while simplyfing expression (processing function results)"), err)
+					}
+
+					return TypeLiteral, simplified, nil
+
 				} else {
 					return NoValue, nil, nil
 				}
-
-			} else {
-				vm.LastExpr = tempVM.ReturnValue
-				return TypeLiteral, tempVM.ReturnValue, nil
+			case ReturnCode:
+				if tempVM.ReturnValue != nil {
+					return TypeLiteral, tempVM.ReturnValue, nil
+				} else {
+					return NoValue, nil, nil
+				}
+			default:
+				return UndefinedExpression, nil, fmt.Errorf("unexpected exit code in function call %d", tempVM.ExitCode)
 			}
 		}
 
-		if tempVM.ReturnValue != nil {
-			vm.LastExpr = tempVM.ReturnValue
-			return TypeLiteral, tempVM.ReturnValue, nil
-		}
-
 		if tempVM.LastExpr != nil {
-			vm.LastExpr = tempVM.LastExpr
-			return TypeLiteral, tempVM.LastExpr, nil
-		}
+			simplified, err := tempVM.simplifyLiteral(tempVM.LastExpr, true)
 
-		return NoValue, nil, nil
+			if err != nil {
+				return UndefinedExpression, nil, errors.Join(errors.New("got error while simplyfing expression (processing function results)"), err)
+			}
+
+			return TypeLiteral, simplified, nil
+
+		} else {
+			return NoValue, nil, nil
+		}
 	case B_COND_JUMP:
 		vm.Idx++
 		exprType, jumpVal, err := vm.runExpr(true)
@@ -543,28 +579,26 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 				return UndefinedExpression, nil, errors.Join(errors.New("got error while running then branch"), err)
 			}
 
-			if tempVM.JumpOffset != 0 {
-				println("before jump", vm.Idx)
-
-				println("jump", tempVM.JumpOffset)
-				vm.Idx += tempVM.JumpOffset
-
-				println("after jump", vm.Idx)
-
-			}
-
 			if tempVM.EarlyExit {
-				vm.Idx = len(vm.Code)
+				switch tempVM.ExitCode {
+				case BreakCode, ContinueCode:
+					vm.ExitCode = BreakCode
+					vm.EarlyExit = true
+					vm.Idx = len(vm.Code)
 
-				vm.EarlyExit = true
-				vm.ReturnValue = tempVM.ReturnValue
-
-				if tempVM.ReturnValue == nil {
-					vm.LastExpr = nil
 					return NoValue, nil, nil
-				} else {
-					vm.LastExpr = tempVM.ReturnValue
-					return TypeLiteral, tempVM.ReturnValue, nil
+				case ReturnCode:
+					vm.EarlyExit = true
+					vm.ExitCode = ReturnCode
+					vm.Idx = len(vm.Code)
+
+					if tempVM.ReturnValue != nil {
+						vm.ReturnValue = tempVM.ReturnValue
+
+						return TypeLiteral, tempVM.ReturnValue, nil
+					} else {
+						return NoValue, nil, nil
+					}
 				}
 			}
 
@@ -576,17 +610,14 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 
 			vm.Idx += length
 
-			if tempVM.ReturnValue == nil {
-				if tempVM.LastExpr != nil {
-					vm.LastExpr = tempVM.LastExpr
-					return TypeLiteral, tempVM.LastExpr, nil
-				}
-
+			if tempVM.LastExpr == nil {
 				vm.LastExpr = nil
+				vm.ExitCode = NormalCode
 				return NoValue, nil, nil
 			} else {
-				vm.LastExpr = tempVM.ReturnValue
-				return TypeLiteral, tempVM.ReturnValue, nil
+				vm.LastExpr = tempVM.LastExpr
+				vm.ExitCode = ReturnCode
+				return TypeLiteral, tempVM.LastExpr, nil
 			}
 		} else {
 			length, err := vm.decodeLen()
@@ -616,55 +647,145 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 				}
 
 				if tempVM.EarlyExit {
-					vm.Idx = len(vm.Code)
-					vm.EarlyExit = true
-					vm.ReturnValue = tempVM.ReturnValue
-				}
+					switch tempVM.ExitCode {
+					case BreakCode, ContinueCode:
+						vm.ExitCode = BreakCode
+						vm.EarlyExit = true
+						vm.Idx = len(vm.Code)
 
-				if tempVM.ReturnValue == nil {
-					if tempVM.LastExpr != nil {
-						vm.LastExpr = tempVM.LastExpr
-						return TypeLiteral, tempVM.LastExpr, nil
+						return NoValue, nil, nil
+					case ReturnCode:
+						vm.ExitCode = ReturnCode
+						vm.EarlyExit = true
+						vm.Idx = len(vm.Code)
+
+						if tempVM.ReturnValue != nil {
+							vm.ReturnValue = tempVM.ReturnValue
+
+							return TypeLiteral, tempVM.ReturnValue, nil
+						} else {
+							return NoValue, nil, nil
+						}
 					}
-
-					vm.LastExpr = nil
-					return NoValue, nil, nil
 				}
 
-				vm.LastExpr = tempVM.ReturnValue
-
-				return TypeLiteral, tempVM.ReturnValue, nil
+				if tempVM.LastExpr == nil {
+					vm.LastExpr = nil
+					vm.ExitCode = NormalCode
+					return NoValue, nil, nil
+				} else {
+					vm.LastExpr = tempVM.LastExpr
+					vm.ExitCode = ReturnCode
+					return TypeLiteral, tempVM.LastExpr, nil
+				}
 			}
 		}
-	case B_JUMP:
+	case B_LOOP:
 		vm.Idx++
 
-		temp := vm.Idx
-
-		offset, err := vm.decodeLen()
+		condidionLen, err := vm.decodeLen()
 
 		if err != nil {
-			return UndefinedExpression, nil, errors.Join(errors.New("got error while decoding jump distance"), err)
+			return UndefinedExpression, nil, errors.Join(errors.New("got error while decoding condition length"), err)
 		}
 
-		vm.JumpOffset = offset + (vm.Idx - temp)
+		condidion := vm.Code[vm.Idx : vm.Idx+condidionLen]
 
-		return JumpStmt, nil, nil
+		vm.Idx += condidionLen
 
-	case B_JUMP_REV:
+		bodyLen, err := vm.decodeLen()
+
+		if err != nil {
+			return UndefinedExpression, nil, errors.Join(errors.New("got error while decoding body length"), err)
+		}
+
+		body := vm.Code[vm.Idx : vm.Idx+bodyLen]
+
+		vm.Idx += bodyLen
+
+		baseVM := vm.copyVM()
+
+		condidionVM := baseVM.newVM(condidion)
+
+		err = condidionVM.Run()
+
+		if err != nil {
+			return UndefinedExpression, nil, errors.Join(errors.New("got error while running condidion"), err)
+		}
+
+		cont, err := condidionVM.LastExpr.ToGoTypes(&condidionVM)
+
+		if err != nil {
+			return UndefinedExpression, nil, errors.Join(errors.New("got error while running condidion"), err)
+		}
+
+		if cont.(bool) {
+			for cont.(bool) {
+				bodyVM := baseVM.newVM(body)
+
+				err = bodyVM.Run()
+
+				if err != nil {
+					return UndefinedExpression, nil, errors.Join(errors.New("got error while running body"), err)
+				}
+
+				if bodyVM.EarlyExit {
+					switch bodyVM.ExitCode {
+					case BreakCode:
+						vm.ExitCode = BreakCode
+						vm.EarlyExit = true
+
+						return NoValue, nil, nil
+					case ReturnCode:
+						vm.ExitCode = ReturnCode
+						vm.EarlyExit = true
+						vm.Idx = len(vm.Code)
+
+						if bodyVM.ReturnValue != nil {
+							vm.ReturnValue = bodyVM.ReturnValue
+
+							return TypeLiteral, bodyVM.ReturnValue, nil
+						} else {
+							return NoValue, nil, nil
+						}
+					}
+				}
+
+				condidionVM := baseVM.newVM(condidion)
+
+				err = condidionVM.Run()
+
+				if err != nil {
+					return UndefinedExpression, nil, errors.Join(errors.New("got error while running condidion"), err)
+				}
+
+				cont, err = condidionVM.LastExpr.ToGoTypes(&condidionVM)
+
+				if err != nil {
+					return UndefinedExpression, nil, errors.Join(errors.New("got error while running condidion"), err)
+				}
+
+				if bodyVM.EarlyExit && bodyVM.ExitCode == ContinueCode {
+					continue
+				}
+			}
+		}
+
+		return NoValue, nil, nil
+	case B_BREAK:
 		vm.Idx++
 
-		temp := vm.Idx
+		vm.ExitCode = BreakCode
+		vm.EarlyExit = true
 
-		offset, err := vm.decodeLen()
+		return NoValue, nil, nil
+	case B_CONTINUE:
+		vm.Idx++
 
-		if err != nil {
-			return UndefinedExpression, nil, errors.Join(errors.New("got error while decoding reverse jump distance"), err)
-		}
+		vm.ExitCode = ContinueCode
+		vm.EarlyExit = true
 
-		vm.JumpOffset = -offset - (vm.Idx - temp)
-
-		return JumpStmt, nil, nil
+		return NoValue, nil, nil
 	default:
 		return UndefinedExpression, nil, fmt.Errorf("unrecognized bytecode: %d", vm.Code[vm.Idx])
 	}
@@ -694,11 +815,11 @@ func (vm *VM) runOp() (*Literal, error) {
 	exprType, right, err := vm.runExpr(true)
 
 	if err != nil {
-		return nil, errors.Join(errors.New("got error while running (left operand)"), err)
+		return nil, errors.Join(errors.New("got error while running (right operand)"), err)
 	}
 
 	if exprType != TypeLiteral {
-		return nil, fmt.Errorf("expected value got %d (left operand)", exprType)
+		return nil, fmt.Errorf("expected value got %d (right operand)", exprType)
 	}
 
 	simpleRight, err := vm.simplifyLiteral(right.(*Literal), true)
@@ -718,10 +839,10 @@ func (vm *VM) runOp() (*Literal, error) {
 		return simpleLeft.opMul(simpleRight)
 	case B_OP_EQ:
 		return simpleLeft.opEq(simpleRight)
-	case B_OP_LT:
-		return simpleLeft.opLt(simpleRight)
 	case B_OP_GT:
 		return simpleLeft.opGt(simpleRight)
+	case B_OP_LT:
+		return simpleLeft.opLt(simpleRight)
 
 	default:
 		return nil, fmt.Errorf("unrecognized operation: %d", vm.Code[vm.Idx])
@@ -758,6 +879,14 @@ func (vm *VM) simplifyLiteral(literal *Literal, resolveRef bool) (*Literal, erro
 		rVal, rErr := vm.Enviroment.resolve(fmt.Sprintf("RT%s", literal.Value.(ReferenceDeclaration).Reference))
 
 		if rErr != nil {
+			for k, v := range vm.Enviroment.Values {
+				fmt.Printf("%s - %s\n", k, v.pretify())
+			}
+
+			for k, v := range vm.Enviroment.Enclosing.Values {
+				fmt.Printf("%s - %s\n", k, v.pretify())
+			}
+
 			return nil, errors.Join(errors.New("error resolivng reference"), rErr)
 		}
 
@@ -796,6 +925,10 @@ func (vm *VM) simplifyLiteral(literal *Literal, resolveRef bool) (*Literal, erro
 
 			simplifiedValue, err := tempVM.simplifyLiteral(actualValue.(*Literal), true)
 
+			if err != nil {
+				return nil, errors.Join(fmt.Errorf("error simplyfing object value idx: %d", i), err)
+			}
+
 			objectData.Entries[entryKey] = simplifiedValue
 		}
 
@@ -820,7 +953,7 @@ func (vm *VM) simplifyLiteral(literal *Literal, resolveRef bool) (*Literal, erro
 			exprType, resolvedValue, err := tempVM.runExpr(true)
 
 			if err != nil {
-				return nil, errors.Join(errors.New("got error while parsing array element"), err)
+				return nil, errors.Join(fmt.Errorf("got error while parsing array element, idx: %d", i), err)
 			}
 
 			if exprType != TypeLiteral {
@@ -830,7 +963,7 @@ func (vm *VM) simplifyLiteral(literal *Literal, resolveRef bool) (*Literal, erro
 			simplifiedValue, err := vm.simplifyLiteral(resolvedValue.(*Literal), true)
 
 			if err != nil {
-				return nil, errors.Join(errors.New("got error while parsing array element"), err)
+				return nil, errors.Join(fmt.Errorf("got error while simplyfing array element, idx: %d", i), err)
 			}
 
 			objectData.Entries[entryKey] = simplifiedValue

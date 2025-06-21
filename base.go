@@ -62,6 +62,12 @@ func FillConsts(vm *VM, act *Parser) {
 				Reference: tempObj["RTReference"].(string),
 				Dynamic:   tempObj["RTDynamic"].(bool),
 			}
+		case ListLiteral:
+			tempList := keyed["RTValue"].([]any)
+
+			for idx, elt := range tempList {
+				fmt.Printf("%d - %t", idx, elt)
+			}
 		default:
 			panic(fmt.Errorf("%d type not implemented", lit.LiteralType))
 		}
@@ -83,34 +89,24 @@ func FillConsts(vm *VM, act *Parser) {
 		return p.match(tt, val)
 	})
 
-	vm.Enviroment.DefineFunction("ParserPeek", func(p *Parser) Token {
-		tok, err := p.peek()
-
-		if err != nil {
-			panic(err)
-		}
-
-		return tok
+	vm.Enviroment.DefineFunction("ParserPeek", func(p *Parser) (Token, error) {
+		return p.peek()
 	})
 
-	vm.Enviroment.DefineFunction("ParserAdvance", func(p *Parser) Token {
-		tok, err := p.advance()
-
-		if err != nil {
-			panic(err)
-		}
-
-		return tok
+	vm.Enviroment.DefineFunction("TokenType", func(t Token) TokenType {
+		return t.Type
 	})
 
-	vm.Enviroment.DefineFunction("ParserParse", func(p *Parser) []Bytecode {
-		tok, err := p.parse()
+	vm.Enviroment.DefineFunction("TokenValue", func(t Token) string {
+		return string(t.Value)
+	})
 
-		if err != nil {
-			panic(err)
-		}
+	vm.Enviroment.DefineFunction("ParserAdvance", func(p *Parser) (Token, error) {
+		return p.advance()
+	})
 
-		return tok
+	vm.Enviroment.DefineFunction("ParserParse", func(p *Parser) ([]Bytecode, error) {
+		return p.parse()
 	})
 
 	vm.Enviroment.DefineFunction("AddScannerRule", func(obj any) {
@@ -176,10 +172,10 @@ func FillConsts(vm *VM, act *Parser) {
 
 				rule.Mappings = res
 			case "ValidChars":
-				tempMap := val.(map[string]any)
+				tempList := val.([]any)
 				res := make([]rune, 0)
 
-				for _, val := range tempMap {
+				for _, val := range tempList {
 					temp, _ := val.(string)
 					for _, tmp := range temp {
 						res = append(res, tmp)
@@ -206,6 +202,7 @@ func FillConsts(vm *VM, act *Parser) {
 
 						for _, elt := range out {
 							eltMap := elt.(map[string]any)
+
 							arr = append(arr, Token{
 								Type:  TokenType(eltMap["RTType"].(int)),
 								Value: []rune(eltMap["RTValue"].(string)),
@@ -265,13 +262,13 @@ func FillConsts(vm *VM, act *Parser) {
 						cast, ok := val.(func(...any) (any, error))
 
 						if !ok {
-							panic("invalid parsing")
+							return nil, errors.New("expected function, got something else")
 						}
 
 						res, err := cast(p)
 
 						if err != nil {
-							panic(err)
+							return nil, errors.Join(errors.New("got error while executing parts function"), err)
 						}
 
 						bytecode, ok := res.([]any)
@@ -332,13 +329,13 @@ func FillConsts(vm *VM, act *Parser) {
 						cast, ok := val.(func(...any) (any, error))
 
 						if !ok {
-							panic("invalid parsing")
+							return []Bytecode{}, errors.New("expected function got something else")
 						}
 
 						res, err := cast(p, btc)
 
 						if err != nil {
-							panic(err)
+							return []Bytecode{}, errors.Join(errors.New("got error while running parts function"), err)
 						}
 
 						bytecode, ok := res.([]any)

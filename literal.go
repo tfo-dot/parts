@@ -93,28 +93,62 @@ func (l *Literal) ToGoTypes(vm *VM) (any, error) {
 				return nil, errors.Join(errors.New("got error while calling function in parts"), err)
 			}
 
-			if tempVM.ReturnValue == nil {
-				if tempVM.LastExpr != nil {
-					converted, err := tempVM.LastExpr.ToGoTypes(&tempVM)
+			if tempVM.EarlyExit {
+				switch tempVM.ExitCode {
+				case NormalCode:
+					if tempVM.LastExpr != nil {
+						simplified, err := tempVM.simplifyLiteral(tempVM.LastExpr, true)
 
-					if err != nil {
-						return nil, errors.Join(errors.New("got error while converting from parts value to go"), err)
+						if err != nil {
+							return nil, errors.Join(errors.New("got error while simplyfing expression (processing function results)"), err)
+						}
+
+						gofied, err := simplified.ToGoTypes(&tempVM)
+
+						if err != nil {
+							return nil, errors.Join(errors.New("got error while converting expression to go (processing function results)"), err)
+						}
+
+						return gofied, nil
+
+					} else {
+						return nil, nil
 					}
+				case ReturnCode:
+					if tempVM.ReturnValue != nil {
+						gofied, err := tempVM.ReturnValue.ToGoTypes(&tempVM)
 
-					return converted, nil
-				} else {
-					return nil, nil
+						if err != nil {
+							return nil, errors.Join(errors.New("got error while converting expression to go (processing function results)"), err)
+						}
 
+						return gofied, nil
+					} else {
+						return nil, nil
+					}
+				default:
+					return nil, fmt.Errorf("unexpected exit code in function call %d", tempVM.ExitCode)
 				}
 			}
 
-			converted, err := tempVM.ReturnValue.ToGoTypes(&tempVM)
+			if tempVM.LastExpr != nil {
+				simplified, err := tempVM.simplifyLiteral(tempVM.LastExpr, true)
 
-			if err != nil {
-				return nil, errors.Join(errors.New("got error while converting from parts value to go"), err)
+				if err != nil {
+					return nil, errors.Join(errors.New("got error while simplyfing expression (processing function results)"), err)
+				}
+
+				gofied, err := simplified.ToGoTypes(&tempVM)
+
+				if err != nil {
+					return nil, errors.Join(errors.New("got error while converting expression to go (processing function results)"), err)
+				}
+
+				return gofied, nil
+
+			} else {
+				return nil, nil
 			}
-
-			return converted, nil
 		}
 
 		return val, nil
@@ -157,7 +191,7 @@ func (l *Literal) ToGoTypes(vm *VM) (any, error) {
 		temp, err := vm.simplifyLiteral(l, true)
 
 		if err != nil {
-			panic(err)
+			return nil, errors.Join(errors.New("got error while simplifiyng list"), err)
 		}
 
 		return temp.ToGoTypes(vm)
@@ -571,13 +605,19 @@ func (ffi FFIFunction) Call(vm *VM) error {
 	funcType := funcVal.Type()
 
 	if funcType.Kind() != reflect.Func {
-		panic("Not a function in FFIFunction (GetArguments)")
+		return errors.New("Not a function in FFIFunction (GetArguments)")
 	}
 
-	resCount := funcType.NumOut()
-
-	if resCount > 1 {
-		panic("Function should return one or less values")
+	switch funcType.NumOut() {
+	case 0:
+	case 1:
+	case 2:
+		errorType := reflect.TypeOf((*error)(nil)).Elem()
+		if funcType.Out(1) != errorType {
+			return errors.New("Function with two return values must have error as the second type")
+		}
+	default:
+		return errors.New("Function should return one, two (with error), or zero values")
 	}
 
 	args := ffi.GetArguments()
@@ -606,7 +646,26 @@ func (ffi FFIFunction) Call(vm *VM) error {
 	funcOut := funcVal.Call(values)
 
 	if len(funcOut) == 0 {
+		vm.ReturnValue = &Literal{ParsedObjLiteral, &PartsSpecialObject{
+			Internal: &PartsObject{},
+			Hash:     "Option.None",
+		}}
+
 		return nil
+	}
+
+	if len(funcOut) == 2 {
+		if err, ok := funcOut[1].Interface().(error); ok && err != nil {
+			vm.ReturnValue = &Literal{ParsedObjLiteral, &PartsSpecialObject{
+				Internal: &PartsObject{Entries: map[string]*Literal{"RTValue": {LiteralType: StringLiteral, Value: err.Error()}}},
+				Hash:     "Result.Error",
+			}}
+
+			vm.ExitCode = ReturnCode
+			vm.EarlyExit = true
+
+			return nil
+		}
 	}
 
 	resConverted, err := LiteralFromGo(funcOut[0].Interface())
@@ -616,6 +675,9 @@ func (ffi FFIFunction) Call(vm *VM) error {
 	}
 
 	vm.ReturnValue = resConverted
+	vm.ExitCode = ReturnCode
+	vm.EarlyExit = true
+
 	return nil
 }
 
@@ -805,6 +867,8 @@ func HashLiteral(literal Literal) (string, error) {
 		return fmt.Sprintf("ST%s", literal.Value.(string)), nil
 	case RefLiteral:
 		return fmt.Sprintf("RT%s", literal.Value.(ReferenceDeclaration).Reference), nil
+	case PointerLiteral:
+		return fmt.Sprintf("PT%s", reflect.ValueOf(literal.Value).Type().String()), nil
 	}
 
 	return "", fmt.Errorf("literal not hashable %d", literal.LiteralType)

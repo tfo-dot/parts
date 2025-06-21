@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/tfo-dot/parts"
 )
@@ -22,10 +23,13 @@ func main() {
 		var (
 			part   string
 			decomp bool
+			timed  bool
 		)
 
 		flag.StringVar(&part, "part", "", "Path to syntax part")
 		flag.BoolVar(&decomp, "decomp", false, "Show decompiled")
+		flag.BoolVar(&timed, "timed", false, "Measure and show time")
+
 		flag.Parse()
 
 		if decomp {
@@ -37,15 +41,35 @@ func main() {
 				panic(err)
 			}
 
-			fmt.Printf("%v", btc)
+			fmt.Printf("Bytecode: %v\n", btc)
+
+			println("Literals:")
+
+			for idx, val := range p.Literals {
+				switch val.LiteralType {
+				case parts.FunLiteral:
+					fmt.Printf("Function bytecode at idx %d - %v \n", idx, val.Value.(parts.FunctionDeclaration).Body)
+				case parts.ListLiteral:
+					fmt.Printf("List bytecode at idx %d - %v \n", idx, val.Value.(parts.ListDefinition).Entries)
+				case parts.ObjLiteral:
+					fmt.Printf("Object bytecode at idx %d - %v \n", idx, val.Value.(parts.ObjDefinition).Entries)
+				}
+			}
+
 			return
 		}
 
 		if part == "" {
+			startTime := time.Now()
+
 			_, err := parts.RunString(string(stdinBytes), "./")
 
 			if err != nil {
 				panic(err)
+			}
+
+			if timed {
+				fmt.Printf("Execution took - %s\n", time.Now().Sub(startTime).String())
 			}
 		} else {
 			rawFile, err := os.ReadFile(part)
@@ -54,10 +78,16 @@ func main() {
 				panic(err)
 			}
 
+			startTime := time.Now()
+
 			_, err = parts.RunStringWithSyntax(string(stdinBytes), string(rawFile), "./")
 
 			if err != nil {
 				panic(err)
+			}
+
+			if timed {
+				fmt.Printf("Execution took - %s\n", time.Now().Sub(startTime).String())
 			}
 		}
 
@@ -67,11 +97,13 @@ func main() {
 			codePath string
 			part     string
 			decomp   bool
+			timed    bool
 		)
 
 		flag.StringVar(&codePath, "code", "", "Path to code to execute")
 		flag.StringVar(&part, "part", "", "Path to syntax part")
 		flag.BoolVar(&decomp, "decomp", false, "Show decompiled")
+		flag.BoolVar(&timed, "timed", false, "Measure and show time")
 		flag.Parse()
 
 		if codePath == "" {
@@ -94,15 +126,35 @@ func main() {
 				panic(err)
 			}
 
-			fmt.Printf("%v", btc)
+			fmt.Printf("Bytecode: %v", btc)
+
+			println("Literals:")
+
+			for idx, val := range p.Literals {
+				switch val.LiteralType {
+				case parts.FunLiteral:
+					fmt.Printf("Function bytecode at idx %d - %v \n", idx, val.Value.(parts.FunctionDeclaration).Body)
+				case parts.ListLiteral:
+					fmt.Printf("List bytecode at idx %d - %v \n", idx, val.Value.(parts.ListDefinition).Entries)
+				case parts.ObjLiteral:
+					fmt.Printf("List bytecode at idx %d - %v \n", idx, val.Value.(parts.ObjDefinition).Entries)
+				}
+			}
+
 			return
 		}
 
 		if part == "" {
+			startTime := time.Now()
+
 			_, err := parts.RunString(string(codeData), codePath)
 
 			if err != nil {
 				panic(err)
+			}
+
+			if timed {
+				fmt.Printf("Execution took - %s\n", time.Now().Sub(startTime).String())
 			}
 		} else {
 			rawFile, err := os.ReadFile(part)
@@ -111,10 +163,16 @@ func main() {
 				panic(err)
 			}
 
+			startTime := time.Now()
+
 			_, err = parts.RunStringWithSyntax(string(codeData), string(rawFile), codePath)
 
 			if err != nil {
 				panic(err)
+			}
+
+			if timed {
+				fmt.Printf("Execution took - %s\n", time.Now().Sub(startTime).String())
 			}
 		}
 	}

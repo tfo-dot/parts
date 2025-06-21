@@ -86,7 +86,7 @@ func (p *Parser) parse() ([]Bytecode, error) {
 	currentToken, err := p.peek()
 
 	if err != nil {
-		panic(err)
+		return nil, errors.Join(errors.New("error peeeking after not matching any tokens"), err)
 	}
 
 	return []Bytecode{}, fmt.Errorf("Unknown rule? (%d - %s)", currentToken.Type, string(currentToken.Value))
@@ -122,7 +122,11 @@ func (p *Parser) match(tokenType TokenType, value string) bool {
 	checkRes := p.check(tokenType, value)
 
 	if checkRes {
-		p.advance()
+		_, err := p.advance()
+
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	return checkRes
@@ -131,7 +135,11 @@ func (p *Parser) match(tokenType TokenType, value string) bool {
 func (p *Parser) check(tokenType TokenType, value string) bool {
 	currentToken, err := p.peek()
 
-	if err != nil || currentToken.Type != tokenType {
+	if err != nil {
+		panic(err)
+	}
+
+	if currentToken.Type != tokenType {
 		return false
 	}
 
@@ -192,9 +200,10 @@ const (
 	B_CALL
 	B_RESOLVE
 	B_COND_JUMP
-	B_JUMP
-	B_JUMP_REV
 	B_BIN_OP
+	B_LOOP
+	B_CONTINUE
+	B_BREAK
 )
 
 type BinOp Bytecode
