@@ -3,13 +3,13 @@ package parts
 type TokenType = int
 
 const (
-	TokenOperator TokenType = iota
+	TokenInvalid TokenType = iota
+	TokenOperator 
 	TokenNumber
 	TokenKeyword
 	TokenIdentifier
 	TokenString
 	TokenSpace
-	TokenInvalid
 )
 
 type Token struct {

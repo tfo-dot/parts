@@ -732,10 +732,7 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 				if bodyVM.EarlyExit {
 					switch bodyVM.ExitCode {
 					case BreakCode:
-						vm.ExitCode = BreakCode
-						vm.EarlyExit = true
-
-						return NoValue, nil, nil
+						break
 					case ReturnCode:
 						vm.ExitCode = ReturnCode
 						vm.EarlyExit = true
@@ -748,6 +745,10 @@ func (vm *VM) runExpr(unwindDot bool) (ExpressionType, any, error) {
 						} else {
 							return NoValue, nil, nil
 						}
+					}
+
+					if bodyVM.ExitCode == BreakCode {
+						break
 					}
 				}
 

@@ -348,7 +348,13 @@ func GetParserRules() []ParserRule {
 											return nil, errors.Join(errors.New("got error while running syntax"), err)
 										}
 
-										return newVm.LastExpr, nil
+										rExpr, err := newVm.simplifyLiteral(newVm.LastExpr, true)
+
+										if err != nil {
+											return nil, errors.Join(errors.New("got error while simplyfiyng return value"), err)
+										}
+
+										return rExpr, nil
 									},
 								}},
 							},

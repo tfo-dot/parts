@@ -65,11 +65,49 @@ func FillConsts(vm *VM, act *Parser) {
 		case ListLiteral:
 			tempList := keyed["RTValue"].([]any)
 
-			for idx, elt := range tempList {
-				fmt.Printf("%d - %t", idx, elt)
+			temp := make([][]Bytecode, 0, len(tempList))
+
+			for _, elt := range tempList {
+				if casted, ok := elt.([]any); ok {
+					arr := make([]Bytecode, 0, len(casted))
+
+					for _, elt1 := range casted {
+						if elt2, ok := elt1.(int); ok {
+							arr = append(arr, Bytecode(elt2))
+						} else {
+							panic("casting error")
+						}
+					}
+
+					temp = append(temp, arr)
+				}
 			}
+
+			lit.Value = ListDefinition{Entries: temp}
+		case ObjLiteral:
+			tempList := keyed["RTValue"].([]any)
+
+			temp := make([][]Bytecode, 0, len(tempList))
+
+			for _, elt := range tempList {
+				if casted, ok := elt.([]any); ok {
+					arr := make([]Bytecode, 0, len(casted))
+
+					for _, elt1 := range casted {
+						if elt2, ok := elt1.(int); ok {
+							arr = append(arr, Bytecode(elt2))
+						} else {
+							panic("casting error")
+						}
+					}
+
+					temp = append(temp, arr)
+				}
+			}
+
+			lit.Value = ObjDefinition{Entries: temp}
 		default:
-			panic(fmt.Errorf("%d type not implemented", lit.LiteralType))
+			panic(fmt.Errorf("%d type not implemented in AppendLiteral", lit.LiteralType))
 		}
 
 		res, err := p.AppendLiteral(lit)
@@ -81,32 +119,30 @@ func FillConsts(vm *VM, act *Parser) {
 		return res
 	})
 
-	vm.Enviroment.DefineFunction("ParserCheck", func(p *Parser, tt TokenType, val string) bool {
-		return p.check(tt, val)
-	})
+	vm.Enviroment.DefineFunction("ParserCheck", func(p *Parser, tt TokenType, val string) bool { return p.check(tt, val) })
+	vm.Enviroment.DefineFunction("ParserMatch", func(p *Parser, tt TokenType, val string) bool { return p.match(tt, val) })
+	vm.Enviroment.DefineFunction("ParserPeek", func(p *Parser) (Token, error) { return p.peek() })
+	vm.Enviroment.DefineFunction("TokenType", func(t Token) TokenType { return t.Type })
+	vm.Enviroment.DefineFunction("TokenValue", func(t Token) string { return string(t.Value) })
+	vm.Enviroment.DefineFunction("StringifyToken", func(t Token) string { return fmt.Sprintf("%v", t) })
+	vm.Enviroment.DefineFunction("ParserAdvance", func(p *Parser) (Token, error) { return p.advance() })
+	vm.Enviroment.DefineFunction("ParserParse", func(p *Parser) ([]Bytecode, error) { return p.parse() })
+	vm.Enviroment.DefineFunction("ParseWithRule", func(p *Parser, rule string) ([]Bytecode, error) { return p.parseWithRule(rule) })
+	vm.Enviroment.DefineFunction("GetParserLiteral", func(p *Parser, offset int) *Literal { return &p.Literals[offset] })
+	vm.Enviroment.DefineFunction("GetStringLiteralValue", func(l *Literal) string { return l.Value.(string) })
 
-	vm.Enviroment.DefineFunction("ParserMatch", func(p *Parser, tt TokenType, val string) bool {
-		return p.match(tt, val)
-	})
-
-	vm.Enviroment.DefineFunction("ParserPeek", func(p *Parser) (Token, error) {
-		return p.peek()
-	})
-
-	vm.Enviroment.DefineFunction("TokenType", func(t Token) TokenType {
-		return t.Type
-	})
-
-	vm.Enviroment.DefineFunction("TokenValue", func(t Token) string {
-		return string(t.Value)
-	})
-
-	vm.Enviroment.DefineFunction("ParserAdvance", func(p *Parser) (Token, error) {
-		return p.advance()
-	})
-
-	vm.Enviroment.DefineFunction("ParserParse", func(p *Parser) ([]Bytecode, error) {
-		return p.parse()
+	vm.Enviroment.DefineFunction("DecodeLen", func(arr []any) (int, error) {
+		switch arr[0].(int) {
+		case 126:
+			return int(arr[1].(int))<<8 | int(arr[2].(int)), nil
+		case 127:
+			return int(arr[1].(int))<<56 | int(arr[2].(int))<<48 |
+				int(arr[3].(int))<<40 | int(arr[4].(int))<<32 |
+				int(arr[5].(int))<<24 | int(arr[6].(int))<<16 |
+				int(arr[7].(int))<<8 | int(arr[8].(int)), nil
+		default:
+			return int(arr[0].(int)), nil
+		}
 	})
 
 	vm.Enviroment.DefineFunction("AddScannerRule", func(obj any) {

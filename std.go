@@ -102,6 +102,67 @@ var StandardLibrary = map[string]*Literal{
 					return args[0], nil
 				},
 			}},
+			"RTSlice": {FunLiteral, NativeMethod{
+				Args: []string{"arr", "start", "end"},
+				Body: func(vm *VM, args []*Literal) (*Literal, error) {
+					if args[0].LiteralType != ParsedListLiteral {
+						return nil, errors.New("expected array as a argument to Array.Slice")
+					}
+
+					if args[1].LiteralType != IntLiteral {
+						return nil, errors.New("expected int as start index argument to Array.Slice")
+					}
+
+					if args[2].LiteralType != IntLiteral {
+						return nil, errors.New("expected int as end index argument to Array.Slice")
+					}
+
+					entries := args[0].Value.(PartsIndexable).GetAll()
+
+					keys := make([]string, 0, len(entries))
+
+					for k := range entries {
+						keys = append(keys, k)
+					}
+
+					sort.Slice(keys, func(i, j int) bool {
+						numStrI := strings.TrimPrefix(keys[i], "IT")
+						numI, errI := strconv.Atoi(numStrI)
+
+						if errI != nil {
+							panic(fmt.Sprintf("could not parse number from key %s: %v\n", keys[i], errI))
+						}
+
+						numStrJ := strings.TrimPrefix(keys[j], "IT")
+						numJ, errJ := strconv.Atoi(numStrJ)
+						if errJ != nil {
+							panic(fmt.Sprintf("could not parse number from key %s: %v\n", keys[j], errJ))
+						}
+
+						return numI < numJ
+					})
+
+					slicedKeys := keys[args[1].Value.(int):args[2].Value.(int)]
+
+					newArr := &PartsObject{Entries: make(map[string]*Literal)}
+
+					for idx, elt := range slicedKeys {
+						newArr.Set(&Literal{LiteralType: IntLiteral, Value: idx}, entries[elt])
+					}
+
+					return &Literal{LiteralType: ParsedListLiteral, Value: newArr}, nil
+				},
+			}},
+			"RTLength": {FunLiteral, NativeMethod{
+				Args: []string{"arr"},
+				Body: func(vm *VM, args []*Literal) (*Literal, error) {
+					if args[0].LiteralType != ParsedListLiteral {
+						return nil, errors.New("expected array as a argument to Array.Length")
+					}
+
+					return &Literal{LiteralType: IntLiteral, Value: args[0].Value.(PartsIndexable).Length()}, nil
+				},
+			}},
 		},
 	}},
 	"RTObject": {ParsedObjLiteral, &PartsObject{
@@ -361,7 +422,7 @@ func (pso PartsSpecialObject) TypeHash() string {
 }
 
 func IsResult(literal *Literal) bool {
-	if literal.LiteralType == ParsedObjLiteral {
+	if literal.LiteralType != ParsedObjLiteral {
 		return false
 	}
 
@@ -371,7 +432,7 @@ func IsResult(literal *Literal) bool {
 }
 
 func IsResultOK(literal *Literal) bool {
-	if literal.LiteralType == ParsedObjLiteral {
+	if literal.LiteralType != ParsedObjLiteral {
 		return false
 	}
 
@@ -379,7 +440,7 @@ func IsResultOK(literal *Literal) bool {
 }
 
 func IsResultError(literal *Literal) bool {
-	if literal.LiteralType == ParsedObjLiteral {
+	if literal.LiteralType != ParsedObjLiteral {
 		return false
 	}
 

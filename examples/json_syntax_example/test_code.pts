@@ -1,20 +1,12 @@
 import syntax from "./syntax.pts" as JSON
 
-printLn("X0")
-
 let tv = use (JSON) {`[ "false" ]`}
-
-printLn("X")
 
 if tv[0] == "false" {
 	printLn("Yeah of course it's false")
 }
 
-printLn("X1")
-
 let fv = use (JSON) {`{"key": "val"}`}
-
-printLn("X2")
 
 if (fv.key) == "val" {
 	printLn("Value matches, sweet")

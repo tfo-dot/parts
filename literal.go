@@ -116,6 +116,13 @@ func (l *Literal) ToGoTypes(vm *VM) (any, error) {
 					}
 				case ReturnCode:
 					if tempVM.ReturnValue != nil {
+
+						if IsResultError(tempVM.ReturnValue) {
+							rVal := tempVM.ReturnValue.Value.(*PartsSpecialObject).GetByKey("RTValue")
+
+							return nil, errors.New(rVal.pretify())
+						}
+
 						gofied, err := tempVM.ReturnValue.ToGoTypes(&tempVM)
 
 						if err != nil {
