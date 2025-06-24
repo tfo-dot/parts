@@ -7,6 +7,15 @@ import (
 )
 
 func FillConsts(vm *VM, act *Parser) {
+	vm.Enviroment.DefineNativeFunction("TypeOf", NativeMethod{
+		Args: []string{"arg"},
+		Body: func(vm *VM, args []*Literal) (*Literal, error) {
+			return &Literal{
+				LiteralType: IntLiteral, Value: int(args[0].LiteralType),
+			}, nil
+		},
+	})
+
 	vm.Enviroment.AppendValues(map[string]any{
 		"TokenOperator":   int(TokenOperator),
 		"TokenNumber":     int(TokenNumber),
@@ -29,15 +38,6 @@ func FillConsts(vm *VM, act *Parser) {
 		"ListLiteral":       int(ListLiteral),
 		"ParsedListLiteral": int(ParsedListLiteral),
 		"PointerLiteral":    int(PointerLiteral),
-	})
-
-	vm.Enviroment.DefineFunction("ClearScanner", func() {
-		act.Scanner.Rules = make([]ScannerRule, 0)
-	})
-
-	vm.Enviroment.DefineFunction("ClearParser", func() {
-		act.Rules = make([]ParserRule, 0)
-		act.PostFix = make([]PostFixRule, 0)
 	})
 
 	vm.Enviroment.DefineFunction("ParserAppendLiteral", func(p *Parser, obj any) []Bytecode {
@@ -130,6 +130,12 @@ func FillConsts(vm *VM, act *Parser) {
 	vm.Enviroment.DefineFunction("ParseWithRule", func(p *Parser, rule string) ([]Bytecode, error) { return p.parseWithRule(rule) })
 	vm.Enviroment.DefineFunction("GetParserLiteral", func(p *Parser, offset int) *Literal { return &p.Literals[offset] })
 	vm.Enviroment.DefineFunction("GetStringLiteralValue", func(l *Literal) string { return l.Value.(string) })
+	vm.Enviroment.DefineFunction("ClearScanner", func() { act.Scanner.Rules = make([]ScannerRule, 0) })
+
+	vm.Enviroment.DefineFunction("ClearParser", func() {
+		act.Rules = make([]ParserRule, 0)
+		act.PostFix = make([]PostFixRule, 0)
+	})
 
 	vm.Enviroment.DefineFunction("DecodeLen", func(arr []any) (int, error) {
 		switch arr[0].(int) {

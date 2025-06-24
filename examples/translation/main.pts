@@ -1,0 +1,10 @@
+import syntax from "./json.pts" as JSON
+import translation from "./xml.pts" as XML
+
+let data = use (JSON) {`{"key": "val", "x": 0}`}
+
+printLn(data)
+
+let out = use (XML) { data }
+
+printLn(out)

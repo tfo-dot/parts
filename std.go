@@ -187,6 +187,58 @@ var StandardLibrary = map[string]*Literal{
 					return &Literal{BoolLiteral, casted.HasByKey(fmt.Sprintf("RT%s", args[1].Value.(string)))}, nil
 				},
 			}},
+			"RTKeys": {FunLiteral, NativeMethod{
+				Args: []string{"obj"},
+				Body: func(vm *VM, args []*Literal) (*Literal, error) {
+					casted, ok := args[0].Value.(PartsIndexable)
+
+					if !ok {
+						return nil, errors.New("obj is not parts PartsIndexable")
+					}
+
+					entries := casted.GetAll()
+
+					keys := make([]string, 0, len(entries))
+
+					for k := range entries {
+						keys = append(keys, k)
+					}
+
+					newArr := &PartsObject{Entries: make(map[string]*Literal)}
+
+					for idx, elt := range keys {
+						newArr.Set(&Literal{LiteralType: IntLiteral, Value: idx}, &Literal{StringLiteral, elt[2:]})
+					}
+
+					return &Literal{LiteralType: ParsedListLiteral, Value: newArr}, nil
+				},
+			}},
+			"RTAnyKey": {FunLiteral, NativeMethod{
+				Args: []string{"obj", "key"},
+				Body: func(vm *VM, args []*Literal) (*Literal, error) {
+					casted, ok := args[0].Value.(PartsIndexable)
+
+					if !ok {
+						return nil, errors.New("obj is not parts PartsIndexable")
+					}
+
+					if args[1].LiteralType != StringLiteral {
+						return nil, errors.New("expected string as an argument to Object.AnyKey")
+					}
+
+					query := args[1].Value.(string)
+
+					entries := casted.GetAll()
+
+					for key, val := range entries {
+						if key[2:] == query {
+							return val, nil
+						}
+					}
+
+					return nil, nil
+				},
+			}},
 		},
 	}},
 	"RTString": {ParsedObjLiteral, &PartsObject{
@@ -232,6 +284,12 @@ var StandardLibrary = map[string]*Literal{
 
 					return &Literal{StringLiteral, args[0].Value.(string)[args[1].Value.(int):args[2].Value.(int)]}, nil
 
+				},
+			}},
+			"RTFrom": {FunLiteral, NativeMethod{
+				Args: []string{"arg"},
+				Body: func(vm *VM, args []*Literal) (*Literal, error) {
+					return &Literal{StringLiteral, args[0].pretify()}, nil
 				},
 			}},
 		},

@@ -1,0 +1,90 @@
+let objSwitch = |>
+	0: fun(obj) = (String.From)(obj),
+	1: fun(obj) = (String.From)(obj),
+	2: fun(obj) = (String.From)(obj),
+	3: fun(obj) = (String.From)(obj),
+	4: fun(obj) = (String.From)(obj),
+	5: fun(obj) = "<PartsFunction>"+ (String.From)(obj) +"</PartsFunction>",
+	6: fun(obj) {
+		let keys = (Object.Keys)(obj)
+		let keysCount = (Array.Length)(keys)
+
+		let i = 0
+
+		let out = "<obj>"
+
+		for (i < keysCount) {
+			let key = keys[i]
+
+			let val = (Object.AnyKey)(obj, key)
+			let valF = objSwitch[ TypeOf( val ) ]
+
+			out = out + "<" + key + ">" + valF(val) + "</" + key + ">" 
+
+			i = i + 1
+		}
+
+		return out + "</obj>"
+	},
+	7: fun(obj) {
+		let keys = (Object.Keys)(obj)
+		let keysCount = (Array.Length)(keys)
+
+		let i = 0
+
+		let out = "<obj>"
+
+		for (i < keysCount) {
+			let key = keys[i]
+
+			let val = (Object.AnyKey)(obj, key)
+			let valF = objSwitch[ TypeOf( val ) ]
+
+			out = out + "<" + key + ">" + valF(val) + "</" + key + ">" 
+
+			i = i + 1
+		}
+
+		return out + "</obj>"
+	},
+	8: fun(obj) {
+		let arrLen = (Array.Length)(obj)
+
+		let i = 0
+
+		let out = "<array>"
+
+		for (i < arrLen) {
+			let valT = objSwitch[ TypeOf( obj[i] ) ]
+
+			out = out + "<elt>" + valT(obj[i]) + "</elt>" 
+
+			i = i + 1
+		}
+
+		return out + "</array>"
+	},
+	9: fun(obj) {
+		let arrLen = (Array.Length)(obj)
+
+		let i = 0
+
+		let out = "<array>"
+
+		for (i < arrLen) {
+			let valT = objSwitch[ TypeOf( obj[i] ) ]
+
+			out = out + "<elt>" + valT(obj[i]) + "</elt>" 
+
+			i = i + 1
+		}
+
+		return out + "</array>"
+	},
+	10: fun(obj) = return "<pointer></pointer>"
+
+<|
+
+let funCode = objSwitch[ TypeOf( data ) ]
+
+return "<data>" + funCode(data) + "</data>"

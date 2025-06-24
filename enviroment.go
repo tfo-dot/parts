@@ -41,6 +41,10 @@ func (env *VMEnviroment) DefineFunction(key string, val any) error {
 	return env.Define(key, &Literal{FunLiteral, FFIFunction{val}})
 }
 
+func (env *VMEnviroment) DefineNativeFunction(key string, val NativeMethod) error {
+	return env.Define(key, &Literal{FunLiteral, val})
+}
+
 func (env *VMEnviroment) AppendValues(values map[string]any) error {
 	for key, rawVal := range values {
 		val, err := LiteralFromGo(rawVal)

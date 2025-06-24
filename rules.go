@@ -100,6 +100,7 @@ func GetScannerRules() []ScannerRule {
 				"fun": "", "return": "", "else": "", "for": "",
 				"import": "", "from": "", "as": "", "syntax": "",
 				"use": "", "raise": "", "break": "", "continue": "",
+				"translation": "",
 			},
 		},
 		{
@@ -368,6 +369,122 @@ func GetParserRules() []ParserRule {
 					return append(append([]Bytecode{B_DECLARE}, literalCode...), literalIdx...), nil
 				}
 
+				if p.matchKeyword("TRANSLATION") {
+					if !p.matchKeyword("FROM") {
+						return []Bytecode{}, errors.New("expected 'from' keyword after import syntax")
+					}
+
+					tempBytecode, err := p.parseWithRule("ParseStr")
+
+					if err != nil {
+						return []Bytecode{}, err
+					}
+
+					if tempBytecode[0] != B_LITERAL {
+						return []Bytecode{}, errors.New("expected string literal")
+					}
+
+					tempBytecode = tempBytecode[1:]
+					stringIdx := -1
+
+					switch tempBytecode[0] {
+					case 126:
+						stringIdx = int(tempBytecode[1])<<8 | int(tempBytecode[2])
+					case 127:
+						stringIdx = int(tempBytecode[1])<<56 | int(tempBytecode[2])<<48 |
+							int(tempBytecode[3])<<40 | int(tempBytecode[4])<<32 |
+							int(tempBytecode[5])<<24 | int(tempBytecode[6])<<16 |
+							int(tempBytecode[7])<<8 | int(tempBytecode[8])
+					default:
+						stringIdx = int(tempBytecode[0])
+					}
+
+					if stringIdx == -1 {
+						return []Bytecode{}, errors.New("expected string literal")
+					}
+
+					stringLiteral := p.Literals[stringIdx]
+
+					if stringLiteral.LiteralType != StringLiteral {
+						return []Bytecode{}, errors.New("expected string literal")
+					}
+
+					source := stringLiteral.Value.(string)
+
+					if !p.matchKeyword("AS") {
+						return []Bytecode{}, errors.New("expected 'as' keyword after import path")
+					}
+
+					identifierToken, err := p.advance()
+
+					if err != nil {
+						return []Bytecode{}, errors.Join(errors.New("got error while advancing token"), err)
+					}
+
+					if identifierToken.Type != TokenIdentifier {
+						return []Bytecode{}, fmt.Errorf("got invalid token instead of identifier ( %d )", identifierToken.Type)
+					}
+
+					literalCode, err := p.AppendLiteral(Literal{
+						LiteralType: RefLiteral,
+						Value:       ReferenceDeclaration{Reference: string(identifierToken.Value), Dynamic: false},
+					})
+
+					rawFile, err := os.ReadFile(path.Join(p.ModulePath, source))
+
+					if err != nil {
+						return []Bytecode{}, errors.Join(errors.New("got error while reading foreign module file"), err)
+					}
+
+					literalIdx, err := p.AppendLiteral(Literal{
+						LiteralType: ParsedObjLiteral,
+						Value: PartsSpecialObject{Internal: &PartsObject{
+							Entries: map[string]*Literal{
+								"RTUse": {FunLiteral, NativeMethod{
+									Args: []string{"obj"},
+									Body: func(vm *VM, args []*Literal) (*Literal, error) {
+										tVM, err := GetVMWithSource(string(rawFile), p.ModulePath)
+
+										if err != nil {
+											return nil, errors.Join(errors.New("got error while running translation parser"), err)
+										}
+
+										FillConsts(tVM, p)
+
+										tVM.Enviroment.Define("data", args[0])
+
+										err = tVM.Run()
+
+										if err != nil {
+											return nil, errors.Join(errors.New("got error while running translation"), err) 
+										}
+
+										if tVM.EarlyExit {
+											if tVM.ExitCode == ReturnCode && tVM.ReturnValue != nil {
+												simple, err := tVM.simplifyLiteral(tVM.ReturnValue, true)
+
+												if err != nil {
+													return nil, errors.Join(errors.New("got error while simplyfiyng return value"), err)  
+												}
+
+												return simple, nil
+											}
+										}
+
+										return nil, nil
+									},
+								}},
+							},
+						}, Hash: "Parts.Translation"},
+					})
+
+					if err != nil {
+						return []Bytecode{}, errors.Join(errors.New("got error while encoding length"), err)
+					}
+
+					return append(append([]Bytecode{B_DECLARE}, literalCode...), literalIdx...), nil
+				}
+
 				return []Bytecode{}, nil
 			},
 		},
@@ -392,44 +509,10 @@ func GetParserRules() []ParserRule {
 					return []Bytecode{}, errors.New("expected '{' after use obj")
 				}
 
-				tempBytecode, err = p.parseWithRule("ParseStr")
+				tempBytecode, err = p.parse()
 
 				if err != nil {
 					return []Bytecode{}, err
-				}
-
-				if tempBytecode[0] != B_LITERAL {
-					return []Bytecode{}, errors.New("expected string literal")
-				}
-
-				stringRef := tempBytecode
-
-				tempBytecode = tempBytecode[1:]
-				stringIdx := -1
-
-				if tempBytecode[0] <= 125 {
-					stringIdx = int(tempBytecode[0])
-				}
-
-				if tempBytecode[0] == 126 {
-					stringIdx = int(tempBytecode[1])<<8 | int(tempBytecode[2])
-				}
-
-				if tempBytecode[0] == 127 {
-					stringIdx = int(tempBytecode[1])<<56 | int(tempBytecode[2])<<48 |
-						int(tempBytecode[3])<<40 | int(tempBytecode[4])<<32 |
-						int(tempBytecode[5])<<24 | int(tempBytecode[6])<<16 |
-						int(tempBytecode[7])<<8 | int(tempBytecode[8])
-				}
-
-				if stringIdx == -1 {
-					return []Bytecode{}, errors.New("expected string literal")
-				}
-
-				stringLiteral := p.Literals[stringIdx]
-
-				if stringLiteral.LiteralType != StringLiteral {
-					return []Bytecode{}, errors.New("expected string literal")
 				}
 
 				if !p.matchOperator("RIGHT_BRACE") {
@@ -447,7 +530,7 @@ func GetParserRules() []ParserRule {
 					return []Bytecode{}, err
 				}
 
-				return append(append(append(append([]Bytecode{B_CALL, B_DOT}, objCode...), useIdx...), 1), stringRef...), nil
+				return append(append(append(append([]Bytecode{B_CALL, B_DOT}, objCode...), useIdx...), 1), tempBytecode...), nil
 			},
 		},
 		{

@@ -1,0 +1,205 @@
+ClearScanner()
+ClearParser()
+
+AddScannerRule( |>
+  Result: TokenKeyword,
+  BaseRule: fun(r) {
+    return (((r >= "a") * (r <= "z")) + ((r >= "A") * (r <= "Z")) + (r == "_"))
+  },
+  Process: fun(mappings, runs) {
+      if (Object.Has)(mappings, runs) {
+    	return |> Type: TokenKeyword, Value: mappings[runs] <|
+      } else {
+        return |> Type: TokenIdentifier, Value: runs <|
+      }
+  },
+  Mappings: |> "false": "FALSE", "true": "TRUE", "null": "NULL" <|
+<| )
+
+ AddScannerRule( |>
+  Result: TokenSpace,
+  Skip: true,
+  BaseRule: fun(r) { return (( r == " ") + (r == "\n") + (r == "\r") + (r == "\t")) }
+<| )
+
+ AddScannerRule( |>
+	Result:   TokenNumber,
+	BaseRule: fun (r) = ((r >= "0") * (r <= "9"))
+<| )
+
+AddScannerRule( |>
+	Result: TokenOperator,
+	Process: fun (mappings, runs) {
+      if ((Object.Has)(mappings, runs)) {
+    	return |> Type: TokenOperator, Value: mappings[runs] <|
+      } else {
+        raise "invalid operator"
+      }
+	},
+	ValidChars: ["{},:[]"],
+	Mappings: |>
+		"{": "LEFT_BRACE", "}": "RIGHT_BRACE",
+		"[": "LEFT_BRACKET", "]": "RIGHT_BRACKET",
+		":": "COLON", ",": "COMMA"
+	<|
+<| )
+
+ AddScannerRule( |>
+ 	Result: TokenString,
+ 	BaseRule: fun (r) = true,
+ 	Rule: fun (runs) {
+ 		let len = (String.Length)(runs)
+ 		let last = len - 1
+
+ 		let lastChar = (String.At)(runs, last)
+
+ 		return ((len == 1) + ((lastChar == `"`) == false))
+ 	},
+ 	Process: fun(mappings, runs) {
+	 		let len = (String.Length)(runs)
+	 		let last = len - 1
+
+	 		let lastChar = (String.At)(runs, last)
+	 		let firstChar = (String.At)(runs, 0)
+
+	 		if (firstChar == `"`) * ((lastChar == `"`) == false) {
+	 			raise "unterminated string"
+	 		}
+	 		
+	 		return [ |> Type: TokenString, Value: ((String.Substring)(runs, 1, last)) <| ]
+  	}
+ <| )
+
+AddParserRule(false, |>
+  Id: "PFalse",
+  AdvanceToken: true,
+  Rule: fun(p) {
+    return ParserCheck(p, TokenKeyword, "FALSE")
+  },
+  Parse: fun(p) {
+    "Literal at 0 - false"
+    return [2, 0]
+  }
+<| )
+
+AddParserRule(false, |>
+  Id: "PTrue",
+  AdvanceToken: true,
+  Rule: fun(p) {
+    return ParserCheck(p, TokenKeyword, "TRUE")
+  },
+  Parse: fun(p) {
+  "Literal at 0 - false"
+    return [2, 1]
+  }
+<| )
+
+AddParserRule(false, |>
+	Id: "ParseStr",
+	Rule: fun(p) = TokenType((ParserPeek(p))) == TokenString,
+	Parse: fun(p) = (ParserAppendLiteral(p, |>
+        LiteralType: StringLiteral,
+        Value: TokenValue((ParserAdvance(p)))
+    <| ))
+<| )
+
+AddParserRule(false, |>
+	Id: "ParseNum",
+	Rule: fun(p) = TokenType((ParserPeek(p))) == TokenNumber,
+	Parse: fun(p) = (ParserAppendLiteral(p, |>
+      	LiteralType: IntLiteral,
+      	Value: (Int.Parse)(TokenValue((ParserAdvance(p))))
+    <| ))
+<| )
+
+AddParserRule(false, |>
+	Id: "ParseObj",
+	AdvanceToken: true,
+	Rule: fun (p) = ParserCheck(p, TokenOperator, "LEFT_BRACE"),
+	Parse: fun (p) {
+        let entries = [ ]
+
+        if ((ParserMatch(p, TokenOperator, "RIGHT_BRACE")) == false) {
+
+            for {
+                let key = ParseWithRule(p, "ParseStr")
+
+                if (Result.IsResult)(key) {
+                    raise key
+                }
+
+                let tempLen = (Array.Length)(key)
+
+                key = (Array.Slice)(key, 1, (tempLen))
+
+                let offset = DecodeLen(key)
+
+                let literal = GetParserLiteral(p, offset)
+
+                let litVal = GetStringLiteralValue(literal)
+
+                let var = ParserAppendLiteral(p, |>
+                    LiteralType: RefLiteral,
+                    Value: |> Reference: litVal, Dynamic: false <|
+                <| )
+
+                if ((ParserMatch(p, TokenOperator, "COLON")) == false) {
+                    raise "expected colon after key"
+                }
+
+                let value = ParserParse(p)
+
+                if (Result.IsResult)(value) {
+                    raise value
+                }
+                
+                let entry = (Array.AppendAll)(var, value)
+
+                entries = entries + entry
+
+                if ((ParserMatch(p, TokenOperator, "COMMA")) == false) {
+                    break
+                }
+            }
+
+            if ((ParserMatch(p, TokenOperator, "RIGHT_BRACE")) == false) {
+                raise "expected closing operator for object"
+            }
+        }
+        
+        return ParserAppendLiteral(p, |> LiteralType: ObjLiteral, Value: entries <| )
+	}
+<| )
+
+AddParserRule(false, |>
+	Id: "ParseArr",
+	AdvanceToken: true,
+	Rule: fun (p) = ParserCheck(p, TokenOperator, "LEFT_BRACKET"),
+	Parse: fun (p) {
+        let entries = [ ]
+
+        if ((ParserMatch(p, TokenOperator, "RIGHT_BRACKET")) == false) {
+
+            for {
+                let entry = ParserParse(p)
+
+                if (Result.IsResult)(entry) {
+                    raise entry
+                }
+
+                entries = entries + entry
+
+                if ((ParserMatch(p, TokenOperator, "COMMA")) == false) {
+                    break
+                }
+            }
+
+            if ((ParserMatch(p, TokenOperator, "RIGHT_BRACKET")) == false) {
+                raise "expected closing operator for object"
+            }
+
+        }
+        
+        return ParserAppendLiteral(p, |> LiteralType: ListLiteral, Value: entries <| )
+	}
+<| )

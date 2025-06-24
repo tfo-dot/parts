@@ -880,14 +880,6 @@ func (vm *VM) simplifyLiteral(literal *Literal, resolveRef bool) (*Literal, erro
 		rVal, rErr := vm.Enviroment.resolve(fmt.Sprintf("RT%s", literal.Value.(ReferenceDeclaration).Reference))
 
 		if rErr != nil {
-			for k, v := range vm.Enviroment.Values {
-				fmt.Printf("%s - %s\n", k, v.pretify())
-			}
-
-			for k, v := range vm.Enviroment.Enclosing.Values {
-				fmt.Printf("%s - %s\n", k, v.pretify())
-			}
-
 			return nil, errors.Join(errors.New("error resolivng reference"), rErr)
 		}
 
