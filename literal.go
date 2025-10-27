@@ -81,81 +81,23 @@ func (l *Literal) ToGoTypes(vm *VM) (any, error) {
 				values[idx] = resolvedExpr
 			}
 
-			tempVM := capturedVM.copyVM()
-
-			for idx, param := range funcObj.GetArguments() {
-				tempVM.Enviroment.define(fmt.Sprintf("RT%s", param), values[idx])
-			}
-
-			err := funcObj.Call(&tempVM)
+			tempVM, res, err := capturedVM.callFunctionVM(funcObj, values)
 
 			if err != nil {
 				return nil, errors.Join(errors.New("got error while calling function in parts"), err)
 			}
 
-			if tempVM.EarlyExit {
-				switch tempVM.ExitCode {
-				case NormalCode:
-					if tempVM.LastExpr != nil {
-						simplified, err := tempVM.simplifyLiteral(tempVM.LastExpr, true)
-
-						if err != nil {
-							return nil, errors.Join(errors.New("got error while simplyfing expression (processing function results)"), err)
-						}
-
-						gofied, err := simplified.ToGoTypes(&tempVM)
-
-						if err != nil {
-							return nil, errors.Join(errors.New("got error while converting expression to go (processing function results)"), err)
-						}
-
-						return gofied, nil
-
-					} else {
-						return nil, nil
-					}
-				case ReturnCode:
-					if tempVM.ReturnValue != nil {
-
-						if IsResultError(tempVM.ReturnValue) {
-							rVal := tempVM.ReturnValue.Value.(*PartsSpecialObject).GetByKey("RTValue")
-
-							return nil, errors.New(rVal.pretify())
-						}
-
-						gofied, err := tempVM.ReturnValue.ToGoTypes(&tempVM)
-
-						if err != nil {
-							return nil, errors.Join(errors.New("got error while converting expression to go (processing function results)"), err)
-						}
-
-						return gofied, nil
-					} else {
-						return nil, nil
-					}
-				default:
-					return nil, fmt.Errorf("unexpected exit code in function call %d", tempVM.ExitCode)
-				}
-			}
-
-			if tempVM.LastExpr != nil {
-				simplified, err := tempVM.simplifyLiteral(tempVM.LastExpr, true)
-
-				if err != nil {
-					return nil, errors.Join(errors.New("got error while simplyfing expression (processing function results)"), err)
-				}
-
-				gofied, err := simplified.ToGoTypes(&tempVM)
+			if res == nil {
+				gofied, err := res.ToGoTypes(tempVM)
 
 				if err != nil {
 					return nil, errors.Join(errors.New("got error while converting expression to go (processing function results)"), err)
 				}
 
 				return gofied, nil
-
-			} else {
-				return nil, nil
 			}
+
+			return nil, nil
 		}
 
 		return val, nil
@@ -524,6 +466,14 @@ func (l *Literal) opLt(other *Literal) (*Literal, error) {
 	}
 }
 
+func (l *Literal) opMod(other *Literal) (*Literal, error) {
+	if l.LiteralType == IntLiteral && other.LiteralType == l.LiteralType {
+		return &Literal{IntLiteral, l.Value.(int) % other.Value.(int)}, nil
+	} else {
+		return nil, fmt.Errorf("operation not supported - mod (dbl|bool|str|ref|fun|obj|ptr, %d)", other.LiteralType)
+	}
+}
+
 func (l *Literal) pretify() string {
 	switch l.LiteralType {
 	case IntLiteral:
@@ -551,8 +501,7 @@ func (l *Literal) pretify() string {
 
 		return "[" + strings.Join(parts, ", ") + "]"
 	case RefLiteral:
-		ref := l.Value.(ReferenceDeclaration)
-		return fmt.Sprintf("|>key: %s, dyn: %t<|", ref.Reference, ref.Dynamic)
+		return fmt.Sprintf("<ref to '%s'>", l.Value)
 	case FunLiteral:
 		funcObj := l.Value.(PartsCallable)
 		return fmt.Sprintf("func(%s)", strings.Join(funcObj.GetArguments(), ","))
@@ -873,7 +822,7 @@ func HashLiteral(literal Literal) (string, error) {
 	case StringLiteral:
 		return fmt.Sprintf("ST%s", literal.Value.(string)), nil
 	case RefLiteral:
-		return fmt.Sprintf("RT%s", literal.Value.(ReferenceDeclaration).Reference), nil
+		return fmt.Sprintf("RT%s", literal.Value), nil
 	case PointerLiteral:
 		return fmt.Sprintf("PT%s", reflect.ValueOf(literal.Value).Type().String()), nil
 	}

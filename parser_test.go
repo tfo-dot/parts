@@ -1247,22 +1247,14 @@ func TestModdedParser(t *testing.T) {
 		    Parse: fun(p, btc) {
 		    	let var = ParserAppendLiteral(p, |>
 			    	LiteralType: RefLiteral,
-			    	Value: |> Reference: "printLn", Dynamic: false <|
+			    	Value: "printLn"
 		    	<| )
-
-		    	printLn("oh")
 
 		    	if (Result.IsResult)(var) {
 		    		raise var
 		    	}
 
-		    	printLn("ma")
-
-
 		    	let x = ((Array.AppendAll)([8], var)) + 1
-
-		    	printLn("god")
-
 
 		    	return (Array.AppendAll)( x, btc )
 		    }
@@ -1284,9 +1276,7 @@ func TestModdedParser(t *testing.T) {
 		return
 	}
 
-	refIdx, _ := GetParserLiteral(parser, RefLiteral, ReferenceDeclaration{
-		Reference: "printLn",
-	})
+	refIdx, _ := GetParserLiteral(parser, RefLiteral, "printLn")
 
 	if refIdx == -1 {
 		t.Error("literal (Ref, printLn) wasn't present")
@@ -1322,10 +1312,6 @@ func GetParserLiteral(p Parser, literalType LiteralType, val any) (int, Literal)
 		}
 
 		if val == nil {
-			return idx, literal
-		}
-
-		if literalType == RefLiteral && literal.Value.(ReferenceDeclaration).Reference == val {
 			return idx, literal
 		}
 

@@ -14,9 +14,7 @@ type VMEnviroment struct {
 func (env *VMEnviroment) Define(key string, value *Literal) error {
 	key = fmt.Sprintf("RT%s", key)
 
-	_, exists := env.Values[key]
-
-	if exists {
+	if _, ok := env.Values[key]; ok {
 		return fmt.Errorf("redefining variable in the same scope ('%s')", key)
 	}
 
@@ -26,7 +24,7 @@ func (env *VMEnviroment) Define(key string, value *Literal) error {
 }
 
 func (env *VMEnviroment) Resolve(key string) (*Literal, error) {
-	if value, exists := env.Values[fmt.Sprintf("RT%s", key)]; exists {
+	if value, ok := env.Values[fmt.Sprintf("RT%s", key)]; ok {
 		return value, nil
 	}
 
@@ -60,9 +58,7 @@ func (env *VMEnviroment) AppendValues(values map[string]any) error {
 }
 
 func (env *VMEnviroment) define(key string, value *Literal) (*Literal, error) {
-	_, exists := env.Values[key]
-
-	if exists {
+	if _, ok := env.Values[key]; ok {
 		return nil, fmt.Errorf("redefining variable in the same scope ('%s')", key)
 	}
 
@@ -159,7 +155,7 @@ func (env *VMEnviroment) Has(key string) bool {
 
 func (env *VMEnviroment) Append(other *VMEnviroment) {
 	deepestEnv := other
-	
+
 	for deepestEnv.Enclosing != nil {
 		deepestEnv = deepestEnv.Enclosing
 	}
@@ -169,7 +165,5 @@ func (env *VMEnviroment) Append(other *VMEnviroment) {
 }
 
 func (env *VMEnviroment) PartsObject() PartsObject {
-	return PartsObject{
-		Entries: env.Values,
-	}
+	return PartsObject{Entries: env.Values}
 }

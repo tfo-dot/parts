@@ -47,6 +47,8 @@ func main() {
 
 			for idx, val := range p.Literals {
 				switch val.LiteralType {
+				case parts.RefLiteral:
+					fmt.Printf("Ref bytecode at idx %d - %s \n", idx, val.Value)
 				case parts.FunLiteral:
 					fmt.Printf("Function bytecode at idx %d - %v \n", idx, val.Value.(parts.FunctionDeclaration).Body)
 				case parts.ListLiteral:

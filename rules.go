@@ -57,9 +57,9 @@ func GetScannerRules() []ScannerRule {
 
 				return retTokens, nil
 			},
-			ValidChars: []rune{'+', '-', '/', '*', ';', '[', ']', '(', ')', '{', '}', '.', ':', ',', '|', '&', '>', '<', '!', '#', '-', '=', '?'},
+			ValidChars: []rune{'+', '-', '/', '*', ';', '[', ']', '(', ')', '{', '}', '.', ':', ',', '|', '&', '>', '<', '!', '#', '-', '=', '?', '%'},
 			Mappings: map[string]string{
-				"+": "PLUS", "-": "MINUS", "/": "SLASH", "*": "STAR",
+				"+": "PLUS", "-": "MINUS", "/": "SLASH", "*": "STAR", "%": "MOD",
 				";": "SEMICOLON", ":": "COLON",
 				".": "DOT", ",": "COMMA",
 				"(": "LEFT_PAREN", ")": "RIGHT_PAREN",
@@ -323,7 +323,7 @@ func GetParserRules() []ParserRule {
 
 					literalCode, err := p.AppendLiteral(Literal{
 						LiteralType: RefLiteral,
-						Value:       ReferenceDeclaration{Reference: string(identifierToken.Value), Dynamic: false},
+						Value:       string(identifierToken.Value),
 					})
 
 					rawFile, err := os.ReadFile(path.Join(p.ModulePath, source))
@@ -427,7 +427,7 @@ func GetParserRules() []ParserRule {
 
 					literalCode, err := p.AppendLiteral(Literal{
 						LiteralType: RefLiteral,
-						Value:       ReferenceDeclaration{Reference: string(identifierToken.Value), Dynamic: false},
+						Value:       string(identifierToken.Value),
 					})
 
 					rawFile, err := os.ReadFile(path.Join(p.ModulePath, source))
@@ -456,7 +456,7 @@ func GetParserRules() []ParserRule {
 										err = tVM.Run()
 
 										if err != nil {
-											return nil, errors.Join(errors.New("got error while running translation"), err) 
+											return nil, errors.Join(errors.New("got error while running translation"), err)
 										}
 
 										if tVM.EarlyExit {
@@ -464,7 +464,7 @@ func GetParserRules() []ParserRule {
 												simple, err := tVM.simplifyLiteral(tVM.ReturnValue, true)
 
 												if err != nil {
-													return nil, errors.Join(errors.New("got error while simplyfiyng return value"), err)  
+													return nil, errors.Join(errors.New("got error while simplyfiyng return value"), err)
 												}
 
 												return simple, nil
@@ -519,12 +519,7 @@ func GetParserRules() []ParserRule {
 					return []Bytecode{}, errors.New("expected '}' after use code")
 				}
 
-				useIdx, err := p.AppendLiteral(Literal{LiteralType: RefLiteral,
-					Value: ReferenceDeclaration{
-						Reference: "Use",
-						Dynamic:   false,
-					},
-				})
+				useIdx, err := p.AppendLiteral(Literal{LiteralType: RefLiteral, Value: "Use"})
 
 				if err != nil {
 					return []Bytecode{}, err
@@ -550,7 +545,7 @@ func GetParserRules() []ParserRule {
 
 				literalCode, err := p.AppendLiteral(Literal{
 					LiteralType: RefLiteral,
-					Value:       ReferenceDeclaration{Reference: string(identifierToken.Value), Dynamic: false},
+					Value:       string(identifierToken.Value),
 				})
 
 				initialValue := []Bytecode{}
@@ -784,17 +779,13 @@ func GetParserRules() []ParserRule {
 			Parse: func(p *Parser) ([]Bytecode, error) {
 				var loopCondition []Bytecode
 
-				if p.check(TokenOperator, "LEFT_PAREN") {
-					btc, err := p.parse()
+				btc, err := p.parse()
 
-					if err != nil {
-						return []Bytecode{}, errors.Join(errors.New("got error while parsing loop condition"), err)
-					}
-
-					loopCondition = btc
-				} else {
-					loopCondition = []Bytecode{B_LITERAL, 1}
+				if err != nil {
+					return []Bytecode{}, errors.Join(errors.New("got error while parsing loop condition"), err)
 				}
+
+				loopCondition = btc
 
 				conditionLength, err := encodeLen(len(loopCondition))
 
@@ -887,7 +878,7 @@ func GetParserRules() []ParserRule {
 				return []Bytecode{B_BREAK}, nil
 			},
 		},
-				{
+		{
 			Id:           "ContinueExpr",
 			AdvanceToken: true,
 			Rule:         func(p *Parser) bool { return p.check(TokenKeyword, "CONTINUE") },
@@ -993,7 +984,7 @@ func GetParserRules() []ParserRule {
 
 				literalIdx, err := p.AppendLiteral(Literal{
 					LiteralType: RefLiteral,
-					Value:       ReferenceDeclaration{Reference: string(raw.Value), Dynamic: false},
+					Value:       string(raw.Value),
 				})
 
 				if err != nil {
@@ -1313,6 +1304,20 @@ func GetPostFixRules() []PostFixRule {
 				returnArr = append(returnArr, elt...)
 
 				return returnArr, nil
+			},
+		},
+		{
+			Id:           "ModuloOp",
+			AdvanceToken: true,
+			Rule:         func(p *Parser) bool { return p.check(TokenOperator, "MOD") },
+			Parse: func(p *Parser, code []Bytecode) ([]Bytecode, error) {
+				elt, err := p.parse()
+
+				if err != nil {
+					return []Bytecode{}, errors.Join(errors.New("expected expression, got error"), err)
+				}
+
+				return append(append([]Bytecode{B_BIN_OP, B_OP_MOD}, code...), elt...), nil
 			},
 		},
 		{

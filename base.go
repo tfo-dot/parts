@@ -56,12 +56,7 @@ func FillConsts(vm *VM, act *Parser) {
 		case StringLiteral:
 			lit.Value = keyed["RTValue"].(string)
 		case RefLiteral:
-			tempObj := keyed["RTValue"].(map[string]any)
-
-			lit.Value = ReferenceDeclaration{
-				Reference: tempObj["RTReference"].(string),
-				Dynamic:   tempObj["RTDynamic"].(bool),
-			}
+			lit.Value = keyed["RTValue"].(string)
 		case ListLiteral:
 			tempList := keyed["RTValue"].([]any)
 

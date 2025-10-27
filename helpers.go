@@ -16,12 +16,12 @@ func GetParserWithSource(source, modulePath string) Parser {
 	scanner := GetScannerWithSource(source)
 
 	return Parser{
-		Scanner:   &scanner,
-		Literals:  InitialLiterals,
-		LastToken: Token{Type: TokenInvalid},
-		Meta:      make(map[string]string),
-		Rules:     GetParserRules(),
-		PostFix:   GetPostFixRules(),
+		Scanner:    &scanner,
+		Literals:   InitialLiterals,
+		LastToken:  Token{Type: TokenInvalid},
+		Meta:       make(map[string]string),
+		Rules:      GetParserRules(),
+		PostFix:    GetPostFixRules(),
 		ModulePath: path.Dir(modulePath),
 	}
 }
@@ -150,6 +150,24 @@ func RunStringWithSyntax(codeString, syntax, modulePath string) (*VM, error) {
 	}
 
 	return &vm, nil
+}
+
+func RunAndRead[T any](code string, out *T) error {
+	vm, err := GetVMWithSource(code, "./")
+
+	if err != nil {
+		return err
+	}
+
+	err = vm.Run()
+
+	if err != nil {
+		return err
+	}
+
+	ReadFromParts(vm, out)
+
+	return nil
 }
 
 func ReadFromParts[T any](vm *VM, out *T) {

@@ -163,6 +163,48 @@ var StandardLibrary = map[string]*Literal{
 					return &Literal{LiteralType: IntLiteral, Value: args[0].Value.(PartsIndexable).Length()}, nil
 				},
 			}},
+			"RTIterator": {FunLiteral, NativeMethod{
+				Args: []string{"arr"},
+				Body: func(vm *VM, args []*Literal) (*Literal, error) {
+					if args[0].LiteralType != ParsedListLiteral {
+						return nil, errors.New("expected array as a argument to Array.Iterator")
+					}
+
+					args[0].Value.(PartsIndexable).SetByKey("@IT", &Literal{LiteralType: IntLiteral, Value: 0})
+
+					return &Literal{LiteralType: ParsedObjLiteral, Value: PartsSpecialObject{
+						Hash: "Parts.Iterator",
+						Internal: &PartsObject{
+							Entries: map[string]*Literal{
+								"RTnext": {LiteralType: FunLiteral, Value: NativeMethod{
+									Args: []string{},
+									Body: func(lVM *VM, _ []*Literal) (*Literal, error) {
+										it := args[0].Value.(PartsIndexable).GetByKey("@IT").Value.(int)
+
+										if args[0].Value.(PartsIndexable).Length()-1 < it+1 {
+											return &Literal{ParsedObjLiteral, PartsSpecialObject{
+												Internal: &PartsObject{},
+												Hash:     "Option.None",
+											}}, nil
+										}
+
+										elt := args[0].Value.(PartsIndexable).GetByKey(fmt.Sprintf("IT%d", it))
+
+										args[0].Value.(PartsIndexable).SetByKey(
+											"@IT",
+											&Literal{LiteralType: IntLiteral, Value: it + 1},
+										)
+										return &Literal{ParsedObjLiteral, PartsSpecialObject{
+											Internal: &PartsObject{Entries: map[string]*Literal{"RTValue": elt}},
+											Hash:     "Option.Some",
+										}}, nil
+									}},
+								},
+							},
+						},
+					}}, nil
+				}},
+			},
 		},
 	}},
 	"RTObject": {ParsedObjLiteral, &PartsObject{
@@ -318,14 +360,14 @@ var StandardLibrary = map[string]*Literal{
 	}},
 	"RTOption": {ParsedObjLiteral, &PartsObject{
 		Entries: map[string]*Literal{
-			"RTNone": {ParsedObjLiteral, &PartsSpecialObject{
+			"RTNone": {ParsedObjLiteral, PartsSpecialObject{
 				Internal: &PartsObject{},
 				Hash:     "Option.None",
 			}},
 			"RTSome": {FunLiteral, NativeMethod{
 				Args: []string{"val"},
 				Body: func(vm *VM, args []*Literal) (*Literal, error) {
-					return &Literal{ParsedObjLiteral, &PartsSpecialObject{
+					return &Literal{ParsedObjLiteral, PartsSpecialObject{
 						Internal: &PartsObject{Entries: map[string]*Literal{"RTValue": args[0]}},
 						Hash:     "Option.Some",
 					}}, nil
@@ -517,4 +559,30 @@ func NewResultOK(literal *Literal) *Literal {
 		Internal: &PartsObject{Entries: map[string]*Literal{"RTValue": literal}},
 		Hash:     "Result.Ok",
 	}}
+}
+
+func IsOption(literal *Literal) bool {
+	if literal.LiteralType != ParsedObjLiteral {
+		return false
+	}
+
+	th := literal.Value.(PartsIndexable).TypeHash()
+
+	return th == "Option.Some" || th == "Option.None"
+}
+
+func IsOptionSome(literal *Literal) bool {
+	if literal.LiteralType != ParsedObjLiteral {
+		return false
+	}
+
+	return literal.Value.(PartsIndexable).TypeHash() == "Option.Some"
+}
+
+func IsOptionNone(literal *Literal) bool {
+	if literal.LiteralType != ParsedObjLiteral {
+		return false
+	}
+
+	return literal.Value.(PartsIndexable).TypeHash() == "Option.None"
 }

@@ -12,23 +12,14 @@ func TestHelperNoTags(t *testing.T) {
 		Age  int
 	}
 
-	vm, err := GetVMWithSource("let Name = \"tfo\"; let Age = 22", "./")
-
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	err = vm.Run()
-
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
 	var testStruct TestStruct
 
-	ReadFromParts(vm, &testStruct)
+	err := RunAndRead("let Name = \"tfo\"; let Age = 22", &testStruct)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
 
 	if testStruct.Age != 22 && testStruct.Name != "tfo" {
 		t.Errorf(
@@ -46,23 +37,14 @@ func TestHelperWithTags(t *testing.T) {
 		Age  int    `parts:"age"`
 	}
 
-	vm, err := GetVMWithSource("let name = \"tfo\"; let age = 22", "./")
-
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	err = vm.Run()
-
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
 	var testStruct TestStruct
 
-	ReadFromParts(vm, &testStruct)
+	err := RunAndRead("let name = \"tfo\"; let age = 22", &testStruct)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
 
 	if testStruct.Age != 22 && testStruct.Name != "tfo" {
 		t.Errorf(
@@ -120,23 +102,14 @@ func TestHelperWithObject(t *testing.T) {
 		} `parts:"loot"`
 	}
 
-	vm, err := GetVMWithSource("let loot = |> exp: 100, gold: 200 <|", "./")
-
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	err = vm.Run()
-
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
 	var testStruct TestStruct
 
-	ReadFromParts(vm, &testStruct)
+	err := RunAndRead("let loot = |> exp: 100, gold: 200 <|", &testStruct)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
 
 	if testStruct.Loot.Exp != 100 {
 		t.Errorf("field value didn't matched got (%d) expected (%d)", testStruct.Loot.Exp, 100)
@@ -165,7 +138,9 @@ func TestHelperJoined(t *testing.T) {
 		Loot []LootStruct
 	}
 
-	vm, err := GetVMWithSource(`
+	var testStruct TestStruct
+
+	err := RunAndRead(`
 		let Id = "LV0_Dragon"
 		let HP = 300
 		let SPD = 40
@@ -175,23 +150,12 @@ func TestHelperJoined(t *testing.T) {
 		let Loot = [
 		  |> Type: 1,  Count: 130 <|,
 		  |> Type: 2, Count: 315 <|
-		]`, "./")
+		]`, &testStruct)
 
 	if err != nil {
 		t.Error(err)
 		return
 	}
-
-	err = vm.Run()
-
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	var testStruct TestStruct
-
-	ReadFromParts(vm, &testStruct)
 
 	if testStruct.Id != "LV0_Dragon" {
 		t.Errorf("field value didn't matched got (%s) expected (%s)", testStruct.Id, "LV0_Dragon")
@@ -238,31 +202,19 @@ func TestDotObj(t *testing.T) {
 		Val int
 	}
 
-	vm, err := GetVMWithSource(`
-		let obj = |> key: 123 <|
-		let Val = obj.key `, "./")
-
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	err = vm.Run()
-
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
 	var testStruct TestStruct
 
-	ReadFromParts(vm, &testStruct)
+	err := RunAndRead(`let obj = |> key: 123 <|; let Val = obj.key `, &testStruct)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
 
 	if testStruct.Val != 123 {
 		t.Errorf("field value didn't matched got (%d) expected (%d)", testStruct.Val, 123)
 		return
 	}
-
 }
 
 func TestDotList(t *testing.T) {
@@ -270,26 +222,17 @@ func TestDotList(t *testing.T) {
 		Val int
 	}
 
-	vm, err := GetVMWithSource(`
-		let obj = [10, 20]
-		let Val = obj.0
-	`, "./")
-
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	err = vm.Run()
-
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
 	var testStruct TestStruct
 
-	ReadFromParts(vm, &testStruct)
+	err := RunAndRead(`
+		let obj = [10, 20]
+		let Val = obj.0
+	`, &testStruct)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
 
 	if testStruct.Val != 10 {
 		t.Errorf("field value didn't matched got (%d) expected (%d)", testStruct.Val, 10)
@@ -612,18 +555,7 @@ func TestIfFullCursed(t *testing.T) {
 }
 
 func TestIfNoElse(t *testing.T) {
-	type TestStruct struct {
-		Res int `parts:"res"`
-	}
-
-	vm, err := GetVMWithSource(`let res = if (false) { 10 }`, "./")
-
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	err = vm.Run()
+	_, err := RunString(`let res = if (false) { 10 }`, "./")
 
 	if err == nil {
 		t.Error(errors.New("expeced error but got none"))
@@ -633,15 +565,14 @@ func TestIfNoElse(t *testing.T) {
 	if errs, ok := err.(interface{ Unwrap() []error }); ok {
 		unwraped := errs.Unwrap()
 
-		if unwraped[len(unwraped)-1].Error() != "got no value, expected value at 'res'" {
-			t.Error(errors.New("expected diffrent kind of errror"))
+		if unwraped[len(unwraped)-1].Error() != "expected value got 1 (declare value)" {
+			t.Error(errors.New("expected different kind of errror"))
 			return
 		}
-	} else {
-		println(err)
-		t.Error(errors.New("expected diffrent kind of errror"))
-		return
 	}
+
+	println(err)
+	t.Error(errors.New("expected different kind of errror"))
 }
 
 func TestMath(t *testing.T) {
@@ -1046,7 +977,8 @@ func TestPointer(t *testing.T) {
 
 func TestChainedIfCondition(t *testing.T) {
 	vm, err := GetVMWithSource(`let turn = 3;
-		if ((turn == 2) == false) * ((turn == 1) == false) { printLn("ig") } else { printLn("nuh uh") }`, "./")
+		let isValid = false;
+		if ((turn == 2) == false) * ((turn == 1) == false) { isValid = true } else { isValid = false }`, "./")
 
 	if err != nil {
 		t.Error(err)
@@ -1068,7 +1000,7 @@ func TestReturnEarlyExit(t *testing.T) {
 
 	vm, err := GetVMWithSource(`
 		let IsValid(turn) {
-		  if (Modulo(turn, 4)) == 0 {
+		  if (turn % 4) == 0 {
 			return 0
 		  }
 		  
@@ -1079,10 +1011,6 @@ func TestReturnEarlyExit(t *testing.T) {
 		t.Error(err)
 		return
 	}
-
-	vm.Enviroment.DefineFunction("Modulo", func(num, div int) int {
-		return num % div
-	})
 
 	err = vm.Run()
 
@@ -1103,7 +1031,7 @@ func TestReturnEarlyExit(t *testing.T) {
 		return 1
 	}
 
-	for i := 0; i < 12; i++ {
+	for i := range 12 {
 		modRes, err := testStruct.IsValid(i)
 
 		if err != nil {
@@ -1125,7 +1053,7 @@ func TestBlockReturn(t *testing.T) {
 
 	vm, err := GetVMWithSource(`
 		let IsValid(turn) {
-		  if (Modulo(turn, 4)) == 0 {
+		  if (turn % 4) == 0 {
 			return 0
 		  }
 		  
@@ -1136,10 +1064,6 @@ func TestBlockReturn(t *testing.T) {
 		t.Error(err)
 		return
 	}
-
-	vm.Enviroment.DefineFunction("Modulo", func(num, div int) int {
-		return num % div
-	})
 
 	err = vm.Run()
 
@@ -1160,7 +1084,7 @@ func TestBlockReturn(t *testing.T) {
 		return 1
 	}
 
-	for i := 0; i < 12; i++ {
+	for i := range 12 {
 		modRes, err := testStruct.IsValid(i)
 
 		if err != nil {
@@ -1185,37 +1109,18 @@ func TestFuncSimplified(t *testing.T) {
 		IsValid func(...any) (any, error)
 	}
 
-	vm, err := GetVMWithSource(`let IsValid(turn) = if (Modulo(turn, 4)) == 0 { 0 } else 1`, "./")
-
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	vm.Enviroment.DefineFunction("Modulo", func(num, div int) int {
-		return num % div
-	})
-
-	err = vm.Run()
-
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
 	var testStruct TestStruct
 
-	ReadFromParts(vm, &testStruct)
+	err := RunAndRead(`let IsValid(turn) = ((turn % 4) == 0) == false`, &testStruct)
 
-	expectedRes := func(num int) int {
-		if num%4 == 0 {
-			return 0
-		}
-
-		return 1
+	if err != nil {
+		t.Error(err)
+		return
 	}
 
-	for i := 0; i < 12; i++ {
+	expectedRes := func(num int) bool { return num%4 != 0 }
+
+	for i := range 12 {
 		modRes, err := testStruct.IsValid(i)
 
 		if err != nil {
@@ -1228,7 +1133,7 @@ func TestFuncSimplified(t *testing.T) {
 			return
 		}
 
-		if modRes.(int) != expectedRes(i) {
+		if modRes.(bool) != expectedRes(i) {
 			t.Errorf("unexpected value at %d", i)
 			return
 		}
@@ -1240,23 +1145,14 @@ func TestMapHelper(t *testing.T) {
 		Stats map[int]int `parts:"stats"`
 	}
 
-	vm, err := GetVMWithSource("let stats = |> 0: 10, 1: 35 <|", "./")
-
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	err = vm.Run()
-
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
 	var testStruct TestStruct
 
-	ReadFromParts(vm, &testStruct)
+	err := RunAndRead("let stats = |> 0: 10, 1: 35 <|", &testStruct)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
 
 	if testStruct.Stats[0] != 10 {
 		t.Errorf("map value didn't matched got (%d) expected (%d)", testStruct.Stats[0], 10)
@@ -1269,35 +1165,26 @@ func TestMapHelper(t *testing.T) {
 	}
 }
 
+type StatsEnum int
+
+const (
+	Stat_HP StatsEnum = iota
+	Stat_ATK
+)
+
 func TestMapHelperAlias(t *testing.T) {
-	type StatsEnum int
-
-	const (
-		Stat_HP StatsEnum = iota
-		Stat_ATK
-	)
-
 	type TestStruct struct {
 		Stats map[StatsEnum]int `parts:"stats"`
 	}
 
-	vm, err := GetVMWithSource("let stats = |> 0: 10, 1: 35 <|", "./")
-
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	err = vm.Run()
-
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
 	var testStruct TestStruct
 
-	ReadFromParts(vm, &testStruct)
+	err := RunAndRead("let stats = |> 0: 10, 1: 35 <|", &testStruct)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
 
 	if testStruct.Stats[Stat_HP] != 10 {
 		t.Errorf("map value didn't matched got (%d) expected (%d)", testStruct.Stats[Stat_HP], 10)
@@ -1311,13 +1198,6 @@ func TestMapHelperAlias(t *testing.T) {
 }
 
 func TestNestedObject(t *testing.T) {
-	type StatsEnum int
-
-	const (
-		Stat_HP StatsEnum = iota
-		Stat_ATK
-	)
-
 	type TestStruct struct {
 		Stats struct {
 			Trigger struct {
@@ -1327,23 +1207,14 @@ func TestNestedObject(t *testing.T) {
 		} `parts:"stats"`
 	}
 
-	vm, err := GetVMWithSource("let stats = |> Trigger: |> Type: 0 <|, Key: 35 <|", "./")
-
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	err = vm.Run()
-
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
 	var testStruct TestStruct
 
-	ReadFromParts(vm, &testStruct)
+	err := RunAndRead("let stats = |> Trigger: |> Type: 0 <|, Key: 35 <|", &testStruct)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
 
 	if testStruct.Stats.Trigger.Type != Stat_HP {
 		t.Errorf("field value didn't matched got (%d) expected (%d)", testStruct.Stats.Trigger.Type, Stat_HP)
@@ -1357,8 +1228,6 @@ func TestNestedObject(t *testing.T) {
 }
 
 func TestNestedFunctionCalls(t *testing.T) {
-	type StatsEnum int
-
 	vm, err := GetVMWithSource(`
 		let x(a) = 1 * a
 		let y(a) = 2 * a

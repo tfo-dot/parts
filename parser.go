@@ -216,6 +216,7 @@ const (
 	B_OP_EQ
 	B_OP_GT
 	B_OP_LT
+	B_OP_MOD
 )
 
 type ImportType Bytecode
@@ -223,11 +224,6 @@ type ImportType Bytecode
 const (
 	B_IMPORT_STX Bytecode = iota
 )
-
-type ReferenceDeclaration struct {
-	Reference string
-	Dynamic   bool
-}
 
 type FunctionDeclaration struct {
 	Params []string
